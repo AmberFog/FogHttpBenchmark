@@ -1,0 +1,33 @@
+{% macro value(value, precision=2) -%}
+{% if value is none -%}
+-
+{%- else -%}
+{{ ("%%.%df" % precision)|format(value) }}
+{%- endif %}
+{%- endmacro %}
+# FogHTTP client creation benchmark results
+
+- Timestamp: `{{ timestamp }}`
+- Python: `{{ python_version }}`
+- Platform: `{{ platform_name }}`
+- Server: `local asyncio HTTP/1.1 loopback server`
+- Iterations/run: `{{ args.iterations }}`
+- Client counts: `{{ args.client_counts }}`
+- Repeats: `{{ args.repeats }}`
+- Shuffle seed: `{{ args.seed }}`
+
+{% if skipped %}
+## Skipped clients
+
+{% for name, reason in skipped.items() %}
+- `{{ name }}`: {{ reason }}
+{% endfor %}
+
+{% endif %}
+## Aggregate
+
+| mode | client | scenario | clients | iters | ops/s median | cv % | p50 ms | p95 ms | p99 ms | close p50 ms | peak RSS MB | end RSS MB | peak threads | end threads | peak fds | end fds | errors |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{% for row in aggregate %}
+| {{ row.mode }} | {{ row.client }} | {{ row.scenario }} | {{ row.client_count }} | {{ row.iterations }} | {{ value(row.ops_s_median, 1) }} | {{ value(row.ops_s_cv_percent, 1) }} | {{ value(row.p50_ms_median, 2) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ value(row.close_p50_ms_median, 2) }} | {{ value(row.peak_rss_delta_mb_max, 1) }} | {{ value(row.end_rss_delta_mb_max, 1) }} | {{ row.peak_threads_delta_max if row.peak_threads_delta_max is not none else "-" }} | {{ row.end_threads_delta_max if row.end_threads_delta_max is not none else "-" }} | {{ row.peak_fds_delta_max if row.peak_fds_delta_max is not none else "-" }} | {{ row.end_fds_delta_max if row.end_fds_delta_max is not none else "-" }} | {{ row.errors_total }} |
+{% endfor %}
