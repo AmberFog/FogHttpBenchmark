@@ -138,8 +138,8 @@ def scenarios() -> dict[str, Scenario]:
             method="GET",
             path="/delay/20",
             expected_json_keys=("ok", "message", "items"),
-            max_connections=POOL_CONTENTION_CONNECTIONS,
-            description="GET with 20 ms delay and a fixed 10-connection pool.",
+            request_limit=POOL_CONTENTION_CONNECTIONS,
+            description="GET with 20 ms delay and a fixed 10-slot request/connection limit.",
         ),
     }
 

@@ -5,6 +5,7 @@ __all__ = (
     "ClientFactory",
     "ClientSpec",
     "LoadResult",
+    "ResourceBackpressureResult",
     "ResponseOutcome",
     "RunResult",
     "Scenario",
@@ -40,9 +41,16 @@ class BenchmarkArgs:
 @dataclass(frozen=True)
 class ClientConfig:
     concurrency: int
-    max_connections: int
+    request_limit: int
     follow_redirects: bool
     max_redirects: int
+    max_pending_requests: int | None = None
+    per_origin_request_limit: int | None = None
+    max_response_body_size: int | None = None
+    idle_connection_limit: int | None = None
+    runtime_workers: int | None = None
+    pool_timeout_s: float = 5.0
+    total_timeout_s: float = 30.0
 
 
 ClientFactory: TypeAlias = Callable[[ClientConfig], "AsyncClientAdapter | SyncClientAdapter"]
@@ -68,7 +76,7 @@ class Scenario:
     expected_redirects: int | None = None
     expected_final_path: str | None = None
     follow_redirects: bool = False
-    max_connections: int | None = None
+    request_limit: int | None = None
     description: str = ""
 
 
@@ -94,7 +102,7 @@ class RunResult:
     mode: str
     scenario: str
     concurrency: int
-    max_connections: int
+    request_limit: int
     requests: int
     repeat: int
     duration_s: float
@@ -144,3 +152,36 @@ class ClientCreationResult:
     end_threads_delta: int | None
     peak_fds_delta: int | None
     end_fds_delta: int | None
+
+
+@dataclass
+class ResourceBackpressureResult:
+    client: str
+    mode: str
+    scenario: str
+    concurrency: int
+    request_limit: int
+    per_origin_request_limit: int | None
+    max_pending_requests: int
+    max_response_body_size: int | None
+    pool_timeout_s: float
+    requests: int
+    warmup: int
+    repeat: int
+    duration_s: float
+    ok_requests: int
+    errors: int
+    warmup_errors: int
+    error_types: dict[str, int]
+    warmup_error_types: dict[str, int]
+    p50_ms: float
+    p95_ms: float
+    p99_ms: float
+    peak_rss_mb: float | None
+    peak_threads: int | None
+    peak_fds: int | None
+    peak_active_requests: int | None
+    peak_pending_requests: int | None
+    client_stats: dict[str, Any] | None
+    recovery_ok: bool | None
+    recovery_error: str | None

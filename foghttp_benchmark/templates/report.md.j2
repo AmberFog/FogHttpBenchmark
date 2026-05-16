@@ -19,8 +19,8 @@
 {% endif %}
 ## Aggregate
 
-| mode | client | scenario | conc | conns | ok/s median | req/s median | cv % | p50 ms | p95 ms | p99 ms | errors % | max RSS MB | max threads | max fds |
+| mode | client | scenario | conc | limit | ok/s median | req/s median | cv % | p50 ms | p95 ms | p99 ms | errors % | max RSS MB | max threads | max fds |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 {% for row in aggregate %}
-| {{ row.mode }} | {{ row.client }} | {{ row.scenario }} | {{ row.concurrency }} | {{ row.max_connections }} | {{ "%.1f"|format(row.ok_req_s_median) }} | {{ "%.1f"|format(row.req_s_median) }} | {{ "%.1f"|format(row.req_s_cv_percent) }} | {{ "%.2f"|format(row.p50_ms_median) }} | {{ "%.2f"|format(row.p95_ms_median) }} | {{ "%.2f"|format(row.p99_ms_median) }} | {{ "%.2f"|format(row.error_rate_percent) }} | {{ "%.1f"|format(row.rss_mb_max) }} | {{ row.threads_max }} | {{ row.fds_max }} |
+| {{ row.mode }} | {{ row.client }} | {{ row.scenario }} | {{ row.concurrency }} | {{ row.request_limit }} | {{ "%.1f"|format(row.ok_req_s_median) }} | {{ "%.1f"|format(row.req_s_median) }} | {{ "%.1f"|format(row.req_s_cv_percent) }} | {{ "%.2f"|format(row.p50_ms_median) }} | {{ "%.2f"|format(row.p95_ms_median) }} | {{ "%.2f"|format(row.p99_ms_median) }} | {{ "%.2f"|format(row.error_rate_percent) }} | {{ "%.1f"|format(row.rss_mb_max) }} | {{ row.threads_max }} | {{ row.fds_max }} |
 {% endfor %}

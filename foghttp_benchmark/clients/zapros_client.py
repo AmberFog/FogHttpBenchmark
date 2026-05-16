@@ -56,12 +56,12 @@ class ZaprosSyncAdapter(SyncClientAdapter):
 def make_zapros_async(config: ClientConfig) -> AsyncClientAdapter:
     zapros = importlib.import_module("zapros")
     handler = zapros.AsyncStdNetworkHandler(
-        total_timeout=30.0,
+        total_timeout=config.total_timeout_s,
         connect_timeout=2.0,
         read_timeout=10.0,
         write_timeout=10.0,
-        max_connections_per_host=config.max_connections,
-        max_idle_connections_per_host=config.max_connections,
+        max_connections_per_host=config.per_origin_request_limit or config.request_limit,
+        max_idle_connections_per_host=config.idle_connection_limit or config.request_limit,
     )
     if config.follow_redirects:
         handler = zapros.RedirectMiddleware(handler, max_redirects=config.max_redirects)
@@ -71,12 +71,12 @@ def make_zapros_async(config: ClientConfig) -> AsyncClientAdapter:
 def make_zapros_sync(config: ClientConfig) -> SyncClientAdapter:
     zapros = importlib.import_module("zapros")
     handler = zapros.StdNetworkHandler(
-        total_timeout=30.0,
+        total_timeout=config.total_timeout_s,
         connect_timeout=2.0,
         read_timeout=10.0,
         write_timeout=10.0,
-        max_connections_per_host=config.max_connections,
-        max_idle_connections_per_host=config.max_connections,
+        max_connections_per_host=config.per_origin_request_limit or config.request_limit,
+        max_idle_connections_per_host=config.idle_connection_limit or config.request_limit,
     )
     if config.follow_redirects:
         handler = zapros.RedirectMiddleware(handler, max_redirects=config.max_redirects)

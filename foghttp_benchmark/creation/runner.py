@@ -45,7 +45,8 @@ async def run_client_creation_benchmarks(
     for spec, repeat, client_count, scenario_name in plan:
         config = ClientConfig(
             concurrency=1,
-            max_connections=1,
+            request_limit=1,
+            per_origin_request_limit=1,
             follow_redirects=False,
             max_redirects=max_redirects,
         )

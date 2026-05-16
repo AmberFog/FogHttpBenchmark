@@ -66,12 +66,19 @@ class FogHTTPSyncAdapter(SyncClientAdapter):
 def make_foghttp_async(config: ClientConfig) -> AsyncClientAdapter:
     foghttp = importlib.import_module("foghttp")
     limits = foghttp_limits(foghttp, config)
-    timeouts = foghttp.Timeouts(connect=2.0, read=10.0, write=10.0, pool=5.0, total=30.0)
+    timeouts = foghttp.Timeouts(
+        connect=2.0,
+        read=10.0,
+        write=10.0,
+        pool=config.pool_timeout_s,
+        total=config.total_timeout_s,
+    )
     client = foghttp.AsyncClient(
         limits=limits,
         timeouts=timeouts,
         follow_redirects=config.follow_redirects,
         max_redirects=config.max_redirects,
+        runtime_workers=config.runtime_workers,
     )
     return FogHTTPAsyncAdapter(client)
 
@@ -79,19 +86,34 @@ def make_foghttp_async(config: ClientConfig) -> AsyncClientAdapter:
 def make_foghttp_sync(config: ClientConfig) -> SyncClientAdapter:
     foghttp = importlib.import_module("foghttp")
     limits = foghttp_limits(foghttp, config)
-    timeouts = foghttp.Timeouts(connect=2.0, read=10.0, write=10.0, pool=5.0, total=30.0)
+    timeouts = foghttp.Timeouts(
+        connect=2.0,
+        read=10.0,
+        write=10.0,
+        pool=config.pool_timeout_s,
+        total=config.total_timeout_s,
+    )
     client = foghttp.Client(
         limits=limits,
         timeouts=timeouts,
         follow_redirects=config.follow_redirects,
         max_redirects=config.max_redirects,
+        runtime_workers=config.runtime_workers,
     )
     return FogHTTPSyncAdapter(client)
 
 
 def foghttp_limits(foghttp: Any, config: ClientConfig) -> Any:
+    max_pending_requests = config.max_pending_requests
+    if max_pending_requests is None:
+        max_pending_requests = max(config.request_limit * 10, config.concurrency)
+    idle_connection_limit = config.idle_connection_limit
+    if idle_connection_limit is None:
+        idle_connection_limit = max(config.request_limit, 1)
     return foghttp.Limits(
-        max_connections=config.max_connections,
-        max_connections_per_host=config.max_connections,
-        max_pending_acquires=max(config.max_connections * 10, config.concurrency),
+        max_active_requests=config.request_limit,
+        max_active_requests_per_origin=config.per_origin_request_limit,
+        max_pending_requests=max_pending_requests,
+        max_response_body_size=config.max_response_body_size,
+        max_idle_connections_per_host=idle_connection_limit,
     )

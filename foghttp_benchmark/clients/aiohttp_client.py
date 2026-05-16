@@ -50,10 +50,10 @@ class AioHTTPAsyncAdapter(AsyncClientAdapter):
 
 def make_aiohttp_async(config: ClientConfig) -> AsyncClientAdapter:
     aiohttp = importlib.import_module("aiohttp")
-    timeout = aiohttp.ClientTimeout(total=30.0, connect=2.0, sock_read=10.0)
+    timeout = aiohttp.ClientTimeout(total=config.total_timeout_s, connect=2.0, sock_read=10.0)
     connector = aiohttp.TCPConnector(
-        limit=config.max_connections,
-        limit_per_host=config.max_connections,
+        limit=config.request_limit,
+        limit_per_host=config.per_origin_request_limit or config.request_limit,
         ttl_dns_cache=300,
     )
     client = aiohttp.ClientSession(

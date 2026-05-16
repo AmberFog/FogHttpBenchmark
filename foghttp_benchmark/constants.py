@@ -10,11 +10,13 @@ __all__ = (
     "DEFAULT_MODES",
     "DEFAULT_REPEATS",
     "DEFAULT_REQUESTS",
+    "DEFAULT_RESOURCE_SCENARIOS",
     "DEFAULT_SCENARIOS",
     "DEFAULT_WARMUP",
     "MAX_SPLIT_ONCE",
     "MIN_VARIATION_SAMPLES",
     "REQUESTS_SUITE",
+    "RESOURCE_BACKPRESSURE_SUITE",
     "RESULTS_DIR",
     "ROOT",
     "SYNC_MODE",
@@ -51,9 +53,13 @@ DEFAULT_SCENARIOS = (
     "delay-20ms,"
     "pool-contention-20ms"
 )
+DEFAULT_RESOURCE_SCENARIOS = (
+    "active-limit-serial,pool-timeout-recovery,pending-queue-full,per-origin-isolation,response-body-limit"
+)
 
 REQUESTS_SUITE = "requests"
 CLIENT_CREATION_SUITE = "client-creation"
+RESOURCE_BACKPRESSURE_SUITE = "resource-backpressure"
 
 BENCHMARK_SEED = 20260507
 MIN_VARIATION_SAMPLES = 2
