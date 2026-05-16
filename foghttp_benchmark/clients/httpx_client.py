@@ -60,10 +60,10 @@ class HTTPXSyncAdapter(SyncClientAdapter):
 def make_httpx_async(config: ClientConfig) -> AsyncClientAdapter:
     httpx = importlib.import_module("httpx")
     limits = httpx.Limits(
-        max_connections=config.max_connections,
-        max_keepalive_connections=config.max_connections,
+        max_connections=config.request_limit,
+        max_keepalive_connections=config.idle_connection_limit or config.request_limit,
     )
-    timeout = httpx.Timeout(connect=2.0, read=10.0, write=10.0, pool=5.0)
+    timeout = httpx.Timeout(connect=2.0, read=10.0, write=10.0, pool=config.pool_timeout_s)
     client = httpx.AsyncClient(
         limits=limits,
         timeout=timeout,
@@ -77,10 +77,10 @@ def make_httpx_async(config: ClientConfig) -> AsyncClientAdapter:
 def make_httpx_sync(config: ClientConfig) -> SyncClientAdapter:
     httpx = importlib.import_module("httpx")
     limits = httpx.Limits(
-        max_connections=config.max_connections,
-        max_keepalive_connections=config.max_connections,
+        max_connections=config.request_limit,
+        max_keepalive_connections=config.idle_connection_limit or config.request_limit,
     )
-    timeout = httpx.Timeout(connect=2.0, read=10.0, write=10.0, pool=5.0)
+    timeout = httpx.Timeout(connect=2.0, read=10.0, write=10.0, pool=config.pool_timeout_s)
     client = httpx.Client(
         limits=limits,
         timeout=timeout,

@@ -17,19 +17,28 @@ from foghttp_benchmark.constants import (
     DEFAULT_MODES,
     DEFAULT_REPEATS,
     DEFAULT_REQUESTS,
+    DEFAULT_RESOURCE_SCENARIOS,
     DEFAULT_SCENARIOS,
     DEFAULT_WARMUP,
     REQUESTS_SUITE,
+    RESOURCE_BACKPRESSURE_SUITE,
     RESULTS_DIR,
 )
 from foghttp_benchmark.creation import run_client_creation_benchmarks
 from foghttp_benchmark.creation_reports import write_creation_reports
 from foghttp_benchmark.models import BenchmarkArgs, ClientSpec
 from foghttp_benchmark.reports import write_reports
+from foghttp_benchmark.resource import resource_cases, run_resource_backpressure_benchmarks
+from foghttp_benchmark.resource.reporting.reports import write_resource_reports
 from foghttp_benchmark.runner import build_plan, run_once
 from foghttp_benchmark.scenarios import scenarios
 from foghttp_benchmark.server import benchmark_server
-from foghttp_benchmark.validation import validate_client_creation_args, validate_request_benchmark_args, validate_suite
+from foghttp_benchmark.validation import (
+    validate_client_creation_args,
+    validate_request_benchmark_args,
+    validate_resource_backpressure_args,
+    validate_suite,
+)
 
 
 if TYPE_CHECKING:
@@ -46,7 +55,7 @@ app = typer.Typer(
 def main(
     suite: Annotated[
         str,
-        typer.Option(help="Benchmark suite: requests or client-creation."),
+        typer.Option(help="Benchmark suite: requests, client-creation, or resource-backpressure."),
     ] = REQUESTS_SUITE,
     clients: Annotated[str, typer.Option(help="Comma-separated clients to benchmark.")] = DEFAULT_CLIENTS,
     modes: Annotated[str, typer.Option(help="Comma-separated modes: async, sync.")] = DEFAULT_MODES,
@@ -106,6 +115,9 @@ async def run_benchmark(args: BenchmarkArgs) -> None:
 
     if args.suite == CLIENT_CREATION_SUITE:
         await run_client_creation_suite(args, clients, skipped)
+        return
+    if args.suite == RESOURCE_BACKPRESSURE_SUITE:
+        await run_resource_backpressure_suite(args, clients, skipped)
         return
 
     await run_request_suite(args, clients, skipped)
@@ -167,6 +179,61 @@ async def run_client_creation_suite(args: BenchmarkArgs, clients: list[ClientSpe
         )
 
     write_creation_reports(results, skipped, args)
+
+
+async def run_resource_backpressure_suite(
+    args: BenchmarkArgs,
+    clients: list[ClientSpec],
+    skipped: dict[str, str],
+) -> None:
+    resource_clients, resource_skipped = foghttp_resource_clients(clients)
+    skipped = {**skipped, **resource_skipped}
+    if not resource_clients:
+        msg = "resource-backpressure suite currently requires the foghttp client"
+        raise ValueError(msg)
+    case_map = resource_cases()
+    requested_cases = resource_scenario_names(args.scenarios)
+    concurrency_levels = parse_int_csv(args.concurrency)
+    validate_resource_backpressure_args(
+        args,
+        requested_cases=requested_cases,
+        case_map=case_map,
+        concurrency_levels=concurrency_levels,
+    )
+    cases = [case_map[name] for name in requested_cases]
+    async with benchmark_server() as base_url, benchmark_server() as secondary_base_url:
+        results = await run_resource_backpressure_benchmarks(
+            clients=resource_clients,
+            base_url=base_url,
+            secondary_base_url=secondary_base_url,
+            cases=cases,
+            concurrency_levels=concurrency_levels,
+            requests=args.requests,
+            warmup=args.warmup,
+            repeats=args.repeats,
+            max_redirects=args.max_redirects,
+            shuffle=not args.no_shuffle,
+            seed=args.seed,
+        )
+
+    write_resource_reports(results, skipped, args)
+
+
+def foghttp_resource_clients(clients: list[ClientSpec]) -> tuple[list[ClientSpec], dict[str, str]]:
+    selected: list[ClientSpec] = []
+    skipped: dict[str, str] = {}
+    for spec in clients:
+        if spec.name == "foghttp":
+            selected.append(spec)
+        else:
+            skipped[f"{spec.mode}:{spec.name}"] = "resource-backpressure suite requires FogHTTP stats"
+    return selected, skipped
+
+
+def resource_scenario_names(value: str) -> list[str]:
+    if value == DEFAULT_SCENARIOS:
+        return parse_csv(DEFAULT_RESOURCE_SCENARIOS)
+    return parse_csv(value)
 
 
 def parse_csv(value: str) -> list[str]:

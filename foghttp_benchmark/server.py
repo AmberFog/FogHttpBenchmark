@@ -59,9 +59,14 @@ async def handle_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
                 keep_alive=keep_alive,
                 extra_headers=extra_headers,
             )
+    except OSError:
+        pass
     finally:
-        writer.close()
-        await writer.wait_closed()
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except OSError:
+            pass
 
 
 def parse_request_headers(header_block: bytes) -> tuple[str, dict[str, str]]:
@@ -82,8 +87,9 @@ def build_response(path: str, body: bytes) -> tuple[int, bytes, bytes, dict[str,
         return redirect
     if request_path == "/json-small":
         return 200, SMALL_JSON, b"application/json", {}
-    if request_path == "/bytes-64k":
-        return 200, BYTES_64K, b"application/octet-stream", {}
+    bytes_body = bytes_response_body(request_path)
+    if bytes_body is not None:
+        return 200, bytes_body, b"application/octet-stream", {}
     if request_path == "/echo":
         return 200, body, b"application/octet-stream", {}
     if request_path.startswith("/delay/"):
@@ -94,6 +100,15 @@ def build_response(path: str, body: bytes) -> tuple[int, bytes, bytes, dict[str,
             {"x-benchmark-delay-ms": request_path.rsplit("/", MAX_SPLIT_ONCE)[1]},
         )
     return 404, b"not found", b"text/plain", {}
+
+
+def bytes_response_body(path: str) -> bytes | None:
+    if path == "/bytes-64k":
+        return BYTES_64K
+    if path.startswith("/bytes/"):
+        size = int(path.rsplit("/", MAX_SPLIT_ONCE)[1])
+        return b"x" * size
+    return None
 
 
 def delay_from_path(path: str) -> int | None:

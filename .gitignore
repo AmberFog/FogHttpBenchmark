@@ -267,5 +267,5 @@ cython_debug/
 results/
 
 # Local context files
-BENCHMARK_CONTEXT.md
+CONTEXT.md
 TASKS.md

@@ -1,0 +1,34 @@
+{% macro value(value, precision=2) -%}
+{% if value is none -%}
+-
+{%- else -%}
+{{ ("%%.%df" % precision)|format(value) }}
+{%- endif %}
+{%- endmacro %}
+# FogHTTP resource/backpressure benchmark results
+
+- Timestamp: `{{ timestamp }}`
+- Python: `{{ python_version }}`
+- Platform: `{{ platform_name }}`
+- Server: `local asyncio HTTP/1.1 loopback server`
+- Requests/run: `{{ args.requests }}`
+- Warmup/run: `{{ args.warmup }}`
+- Repeats: `{{ args.repeats }}`
+- Shuffle seed: `{{ args.seed }}`
+- Cases: `{% for row in aggregate|map(attribute="scenario")|unique %}{{ row }}{% if not loop.last %},{% endif %}{% endfor %}`
+
+{% if skipped %}
+## Skipped clients
+
+{% for name, reason in skipped.items() %}
+- `{{ name }}`: {{ reason }}
+{% endfor %}
+
+{% endif %}
+## Aggregate
+
+| mode | scenario | conc | active limit | origin limit | pending limit | ok | errors % | p95 ms | p99 ms | peak active | peak pending | pool timeouts | recovery failures | max threads | max fds | error types |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+{% for row in aggregate %}
+| {{ row.mode }} | {{ row.scenario }} | {{ row.concurrency }} | {{ row.request_limit }} | {{ row.per_origin_request_limit if row.per_origin_request_limit is not none else "-" }} | {{ row.max_pending_requests }} | {{ row.ok_requests_total }} | {{ value(row.error_rate_percent, 2) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ row.peak_active_requests_max if row.peak_active_requests_max is not none else "-" }} | {{ row.peak_pending_requests_max if row.peak_pending_requests_max is not none else "-" }} | {{ row.final_pool_timeouts_max if row.final_pool_timeouts_max is not none else "-" }} | {{ row.recovery_failures }} | {{ row.threads_max if row.threads_max is not none else "-" }} | {{ row.fds_max if row.fds_max is not none else "-" }} | `{{ row.error_types }}` |
+{% endfor %}

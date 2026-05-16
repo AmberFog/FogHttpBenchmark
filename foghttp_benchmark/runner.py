@@ -49,10 +49,11 @@ async def run_once(
     warmup: int,
     max_redirects: int = DEFAULT_MAX_REDIRECTS,
 ) -> RunResult:
-    max_connections = scenario.max_connections or concurrency
+    request_limit = scenario.request_limit or concurrency
     config = ClientConfig(
         concurrency=concurrency,
-        max_connections=max_connections,
+        request_limit=request_limit,
+        per_origin_request_limit=request_limit,
         follow_redirects=scenario.follow_redirects,
         max_redirects=max_redirects,
     )
@@ -81,7 +82,7 @@ async def run_once(
         mode=spec.mode,
         scenario=scenario.name,
         concurrency=concurrency,
-        max_connections=max_connections,
+        request_limit=request_limit,
         requests=requests,
         repeat=repeat,
         duration_s=duration,

@@ -22,11 +22,11 @@ TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 def aggregate_results(results: list[RunResult]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, str, int, int], list[RunResult]] = {}
     for result in results:
-        key = (result.mode, result.client, result.scenario, result.concurrency, result.max_connections)
+        key = (result.mode, result.client, result.scenario, result.concurrency, result.request_limit)
         grouped.setdefault(key, []).append(result)
 
     rows: list[dict[str, Any]] = []
-    for (mode, client, scenario, concurrency, max_connections), items in sorted(grouped.items()):
+    for (mode, client, scenario, concurrency, request_limit), items in sorted(grouped.items()):
         requests_total = sum(item.requests for item in items)
         errors_total = sum(item.errors for item in items)
         rows.append(
@@ -35,7 +35,7 @@ def aggregate_results(results: list[RunResult]) -> list[dict[str, Any]]:
                 "client": client,
                 "scenario": scenario,
                 "concurrency": concurrency,
-                "max_connections": max_connections,
+                "request_limit": request_limit,
                 "requests": items[0].requests,
                 "repeats": len(items),
                 "req_s_median": statistics.median(item.requests_per_second for item in items),

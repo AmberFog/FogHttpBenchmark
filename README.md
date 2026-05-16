@@ -7,6 +7,9 @@ and treats it as an external user-facing dependency.
 The goal is not marketing-perfect numbers. The goal is a repeatable, readable
 harness that shows real trade-offs across buffered HTTP workloads, redirects,
 pool contention, delay scenarios, resource usage, and client lifecycle cost.
+For FogHTTP `0.2.x`, the harness also includes a dedicated
+resource/backpressure suite for active request limits, per-origin limits,
+pending queues, pool timeouts, and buffered response body limits.
 
 ## What It Measures
 
@@ -26,7 +29,7 @@ uv sync
 The project dependency on `foghttp` is resolved from PyPI:
 
 ```toml
-"foghttp>=0.1.3,<0.2"
+"foghttp>=0.2,<0.3"
 ```
 
 To benchmark a different released version, change the dependency constraint and
@@ -60,6 +63,25 @@ uv run foghttp-benchmark \
   --output-dir results/client-creation
 ```
 
+## Resource / Backpressure Benchmark
+
+```bash
+uv run foghttp-benchmark \
+  --suite resource-backpressure \
+  --clients foghttp \
+  --modes async,sync \
+  --requests 200 \
+  --warmup 0 \
+  --repeats 3 \
+  --concurrency 10,50,100 \
+  --output-dir results/resource-backpressure
+```
+
+This suite is FogHTTP-specific because it uses `TransportStats` from the public
+`0.2.x` API. It checks global active request slots, per-origin active request
+slots, bounded pending requests, `PoolTimeout` behavior, recovery after timeout
+bursts, and `max_response_body_size` cleanup.
+
 ## Outputs
 
 Each run writes timestamped JSON and Markdown reports plus `latest.json` and
@@ -72,6 +94,9 @@ part of a release or benchmark note.
 - Benchmarks use a local asyncio HTTP/1.1 loopback server.
 - Scenarios are shuffled by default with a stable seed.
 - Sync and async results should be compared separately.
+- In request reports, `limit` means the configured benchmark pressure limit.
+  For FogHTTP `0.2.x` it maps to active request slots and idle pool capacity;
+  for other clients it maps to their connection pool limit.
 - Higher `ok/s` or lifecycle `ops/s` is better.
 - Lower latency, thread count, file descriptor count, memory delta, and errors
   are better.
