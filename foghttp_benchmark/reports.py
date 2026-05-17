@@ -1,6 +1,6 @@
-__all__ = ("aggregate_results", "write_reports")
+__all__ = ("RequestAggregateRow", "aggregate_results", "write_reports")
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from importlib import metadata
 import json
 from pathlib import Path
@@ -8,7 +8,6 @@ import platform
 import statistics
 import sys
 import time
-from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -19,40 +18,63 @@ from foghttp_benchmark.models import BenchmarkArgs, RunResult
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
-def aggregate_results(results: list[RunResult]) -> list[dict[str, Any]]:
+@dataclass(frozen=True, slots=True)
+class RequestAggregateRow:
+    mode: str
+    client: str
+    scenario: str
+    concurrency: int
+    request_limit: int
+    requests: int
+    repeats: int
+    req_s_median: float
+    ok_req_s_median: float
+    req_s_cv_percent: float
+    p50_ms_median: float
+    p95_ms_median: float
+    p99_ms_median: float
+    rss_mb_max: float
+    threads_max: int
+    fds_max: int
+    errors_total: int
+    warmup_errors_total: int
+    error_rate_percent: float
+
+
+def aggregate_results(results: list[RunResult]) -> list[RequestAggregateRow]:
     grouped: dict[tuple[str, str, str, int, int], list[RunResult]] = {}
     for result in results:
         key = (result.mode, result.client, result.scenario, result.concurrency, result.request_limit)
         grouped.setdefault(key, []).append(result)
 
-    rows: list[dict[str, Any]] = []
+    rows: list[RequestAggregateRow] = []
     for (mode, client, scenario, concurrency, request_limit), items in sorted(grouped.items()):
         requests_total = sum(item.requests for item in items)
         errors_total = sum(item.errors for item in items)
         rows.append(
-            {
-                "mode": mode,
-                "client": client,
-                "scenario": scenario,
-                "concurrency": concurrency,
-                "request_limit": request_limit,
-                "requests": items[0].requests,
-                "repeats": len(items),
-                "req_s_median": statistics.median(item.requests_per_second for item in items),
-                "ok_req_s_median": statistics.median(item.ok_requests_per_second for item in items),
-                "req_s_cv_percent": coefficient_of_variation(
+            RequestAggregateRow(
+                mode=mode,
+                client=client,
+                scenario=scenario,
+                concurrency=concurrency,
+                request_limit=request_limit,
+                requests=items[0].requests,
+                repeats=len(items),
+                req_s_median=statistics.median(item.requests_per_second for item in items),
+                ok_req_s_median=statistics.median(item.ok_requests_per_second for item in items),
+                req_s_cv_percent=coefficient_of_variation(
                     [item.requests_per_second for item in items],
                 ),
-                "p50_ms_median": statistics.median(item.p50_ms for item in items),
-                "p95_ms_median": statistics.median(item.p95_ms for item in items),
-                "p99_ms_median": statistics.median(item.p99_ms for item in items),
-                "rss_mb_max": max((item.peak_rss_mb or 0.0) for item in items),
-                "threads_max": max((item.peak_threads or 0) for item in items),
-                "fds_max": max((item.peak_fds or 0) for item in items),
-                "errors_total": errors_total,
-                "warmup_errors_total": sum(item.warmup_errors for item in items),
-                "error_rate_percent": (errors_total / requests_total) * 100 if requests_total else 0.0,
-            },
+                p50_ms_median=statistics.median(item.p50_ms for item in items),
+                p95_ms_median=statistics.median(item.p95_ms for item in items),
+                p99_ms_median=statistics.median(item.p99_ms for item in items),
+                rss_mb_max=max((item.peak_rss_mb or 0.0) for item in items),
+                threads_max=max((item.peak_threads or 0) for item in items),
+                fds_max=max((item.peak_fds or 0) for item in items),
+                errors_total=errors_total,
+                warmup_errors_total=sum(item.warmup_errors for item in items),
+                error_rate_percent=(errors_total / requests_total) * 100 if requests_total else 0.0,
+            ),
         )
     return rows
 
@@ -79,11 +101,11 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
             "server": "local asyncio HTTP/1.1 loopback server",
             "args": vars(args),
             "package_versions": package_versions(
-                ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "typer"],
+                ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
             "skipped": skipped,
         },
-        "aggregate": aggregate,
+        "aggregate": [asdict(row) for row in aggregate],
         "runs": [asdict(result) for result in results],
     }
     json_path = output_dir / f"{timestamp}.json"
@@ -102,7 +124,7 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
 
 def render_markdown_report(
     timestamp: str,
-    aggregate: list[dict[str, Any]],
+    aggregate: list[RequestAggregateRow],
     skipped: dict[str, str],
     args: BenchmarkArgs,
 ) -> str:

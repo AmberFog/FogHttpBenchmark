@@ -1,4 +1,7 @@
 __all__ = (
+    "CLIENT_STAT_KEYS",
+    "StatsProvider",
+    "client_stats_from_raw",
     "json_has_keys",
     "request_kwargs",
     "response_content",
@@ -6,13 +9,27 @@ __all__ = (
     "stats_from_client",
 )
 
-from dataclasses import asdict
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import is_dataclass
+from typing import Any, Protocol
 
-from foghttp_benchmark.models import ResponseOutcome, Scenario
+from foghttp_benchmark.models import ClientStatKey, ClientStats, JsonObject, ResponseOutcome, Scenario
 
 
-def request_kwargs(scenario: Scenario, *, body_key: str) -> dict[str, Any]:
+CLIENT_STAT_KEYS: tuple[ClientStatKey, ...] = (
+    "active_requests",
+    "pending_requests",
+    "total_requests",
+    "failed_requests",
+    "pool_acquire_timeouts",
+)
+
+
+class StatsProvider(Protocol):
+    def stats(self) -> object | None: ...
+
+
+def request_kwargs(scenario: Scenario, *, body_key: str) -> JsonObject:
     if scenario.json_body is not None:
         return {"json": scenario.json_body}
     if scenario.body is not None:
@@ -66,8 +83,28 @@ def json_has_keys(value: Any, keys: tuple[str, ...]) -> bool:
     return isinstance(value, dict) and all(key in value for key in keys)
 
 
-def stats_from_client(client: Any) -> dict[str, Any] | None:
-    stats = client.stats()
-    if hasattr(stats, "__dataclass_fields__"):
-        return asdict(stats)
-    return dict(stats)
+def stats_from_client(client: StatsProvider) -> ClientStats | None:
+    return client_stats_from_raw(client.stats())
+
+
+def client_stats_from_raw(stats: object | None) -> ClientStats | None:
+    if stats is None:
+        return None
+    if is_dataclass(stats) and not isinstance(stats, type):
+        return client_stats_from_dataclass(stats)
+    if isinstance(stats, Mapping):
+        return client_stats_from_mapping(stats)
+    return None
+
+
+def client_stats_from_dataclass(stats: object) -> ClientStats:
+    return client_stats_from_mapping({key: getattr(stats, key, None) for key in CLIENT_STAT_KEYS})
+
+
+def client_stats_from_mapping(stats: Mapping[object, object]) -> ClientStats:
+    typed_stats: ClientStats = {}
+    for key in CLIENT_STAT_KEYS:
+        value = stats.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            typed_stats[key] = value
+    return typed_stats

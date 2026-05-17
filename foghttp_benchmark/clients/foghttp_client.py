@@ -10,7 +10,7 @@ from typing import Any
 
 from foghttp_benchmark.clients.base import AsyncClientAdapter, SyncClientAdapter
 from foghttp_benchmark.clients.utils import request_kwargs, response_outcome, stats_from_client
-from foghttp_benchmark.models import ClientConfig, ResponseOutcome, Scenario
+from foghttp_benchmark.models import ClientConfig, ClientStats, ResponseOutcome, Scenario
 
 
 class FogHTTPAsyncAdapter(AsyncClientAdapter):
@@ -34,7 +34,7 @@ class FogHTTPAsyncAdapter(AsyncClientAdapter):
     async def close(self) -> None:
         await self.client.aclose()
 
-    def stats(self) -> dict[str, Any] | None:
+    def stats(self) -> ClientStats | None:
         return stats_from_client(self.client)
 
 
@@ -59,7 +59,7 @@ class FogHTTPSyncAdapter(SyncClientAdapter):
     def close(self) -> None:
         self.client.close()
 
-    def stats(self) -> dict[str, Any] | None:
+    def stats(self) -> ClientStats | None:
         return stats_from_client(self.client)
 
 

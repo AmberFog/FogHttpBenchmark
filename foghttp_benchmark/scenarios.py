@@ -11,10 +11,9 @@ __all__ = (
 
 import importlib
 import json
-from typing import Any
 
 from foghttp_benchmark.constants import BENCHMARK_SEED
-from foghttp_benchmark.models import Scenario
+from foghttp_benchmark.models import JsonObject, Scenario
 
 
 POOL_CONTENTION_CONNECTIONS = 10
@@ -144,7 +143,7 @@ def scenarios() -> dict[str, Scenario]:
     }
 
 
-def build_post_json() -> dict[str, Any]:
+def build_post_json() -> JsonObject:
     try:
         faker_module = importlib.import_module("faker")
     except ImportError:

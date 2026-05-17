@@ -1,10 +1,10 @@
 __all__ = ("AsyncClientAdapter", "SyncClientAdapter")
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from foghttp_benchmark.models import ResponseOutcome, Scenario
+    from foghttp_benchmark.models import ClientStats, ResponseOutcome, Scenario
 
 
 class AsyncClientAdapter:
@@ -14,7 +14,7 @@ class AsyncClientAdapter:
     async def close(self) -> None:
         raise NotImplementedError
 
-    def stats(self) -> dict[str, Any] | None:
+    def stats(self) -> "ClientStats | None":
         return None
 
 
@@ -25,5 +25,5 @@ class SyncClientAdapter:
     def close(self) -> object | None:
         raise NotImplementedError
 
-    def stats(self) -> dict[str, Any] | None:
+    def stats(self) -> "ClientStats | None":
         return None

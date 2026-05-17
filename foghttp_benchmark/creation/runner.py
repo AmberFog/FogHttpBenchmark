@@ -25,6 +25,7 @@ from foghttp_benchmark.creation.operations_sync import (
     run_sync_reused_request,
 )
 from foghttp_benchmark.models import ClientConfig, ClientCreationResult, ClientSpec, Scenario
+from foghttp_benchmark.progress import ProgressReporter, progress_stage
 
 
 async def run_client_creation_benchmarks(
@@ -38,29 +39,41 @@ async def run_client_creation_benchmarks(
     max_redirects: int = DEFAULT_MAX_REDIRECTS,
     shuffle: bool,
     seed: int,
+    progress: ProgressReporter | None = None,
 ) -> list[ClientCreationResult]:
     plan = build_creation_plan(clients, repeats, client_counts, shuffle=shuffle, seed=seed)
     url = base_url + scenario.path
     results: list[ClientCreationResult] = []
-    for spec, repeat, client_count, scenario_name in plan:
-        config = ClientConfig(
-            concurrency=1,
-            request_limit=1,
-            per_origin_request_limit=1,
-            follow_redirects=False,
-            max_redirects=max_redirects,
-        )
-        result = await measure_creation_scenario(
-            spec,
-            config,
-            scenario_name=scenario_name,
-            scenario=scenario,
-            url=url,
-            iterations=iterations,
-            client_count=client_count,
-            repeat=repeat,
-        )
-        results.append(result)
+    with progress_stage(progress, "Client lifecycle runs", total=len(plan)) as progress_step:
+        for spec, repeat, client_count, scenario_name in plan:
+            label = creation_progress_label(
+                mode=spec.mode,
+                client=spec.name,
+                scenario=scenario_name,
+                client_count=client_count,
+                repeat=repeat,
+                repeats=repeats,
+            )
+            progress_step.update(label)
+            config = ClientConfig(
+                concurrency=1,
+                request_limit=1,
+                per_origin_request_limit=1,
+                follow_redirects=False,
+                max_redirects=max_redirects,
+            )
+            result = await measure_creation_scenario(
+                spec,
+                config,
+                scenario_name=scenario_name,
+                scenario=scenario,
+                url=url,
+                iterations=iterations,
+                client_count=client_count,
+                repeat=repeat,
+            )
+            results.append(result)
+            progress_step.advance(label)
     return results
 
 
@@ -81,6 +94,18 @@ def build_creation_plan(
         rng = random.Random(seed)  # noqa: S311
         rng.shuffle(plan)
     return plan
+
+
+def creation_progress_label(
+    *,
+    mode: str,
+    client: str,
+    scenario: str,
+    client_count: int,
+    repeat: int,
+    repeats: int,
+) -> str:
+    return f"{mode}/{client} {scenario} clients={client_count} repeat={repeat}/{repeats}"
 
 
 async def measure_creation_scenario(

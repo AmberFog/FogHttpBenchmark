@@ -1,0 +1,97 @@
+{% macro value(value, precision=3) -%}
+{% if value is none -%}
+-
+{%- else -%}
+{{ ("%%.%df" % precision)|format(value) }}
+{%- endif %}
+{%- endmacro %}
+{% macro percent_delta(ratio) -%}
+{% if ratio is none -%}
+-
+{%- else -%}
+{{ "%+.1f"|format((ratio - 1.0) * 100) }}%
+{%- endif %}
+{%- endmacro %}
+# FogHTTP benchmark comparison
+
+- Suite: `{{ comparison.metadata.suite }}`
+- Focus client: `{{ comparison.metadata.focus_client }}`
+- Old report: `{{ comparison.metadata.old_path }}`
+- New report: `{{ comparison.metadata.new_path }}`
+- Old timestamp: `{{ comparison.metadata.old_timestamp }}`
+- New timestamp: `{{ comparison.metadata.new_timestamp }}`
+- Old {{ comparison.metadata.focus_client }}: `{{ comparison.metadata.old_focus_version }}`
+- New {{ comparison.metadata.focus_client }}: `{{ comparison.metadata.new_focus_version }}`
+
+## Summary
+
+| segment | rows | primary geomean | primary median | p95 geomean | p99 geomean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| overall | {{ comparison.overall.rows }} | {{ value(comparison.overall.primary_geomean_ratio) }} ({{ percent_delta(comparison.overall.primary_geomean_ratio) }}) | {{ value(comparison.overall.primary_median_ratio) }} ({{ percent_delta(comparison.overall.primary_median_ratio) }}) | {{ value(comparison.overall.p95_geomean_ratio) }} ({{ percent_delta(comparison.overall.p95_geomean_ratio) }}) | {{ value(comparison.overall.p99_geomean_ratio) }} ({{ percent_delta(comparison.overall.p99_geomean_ratio) }}) |
+
+{% if comparison.wins %}
+## Competitive Position
+
+| old wins | new wins | groups | old to winner | new to winner | old avg rank | new avg rank |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| {{ comparison.wins.old_wins }} | {{ comparison.wins.new_wins }} | {{ comparison.wins.comparable_groups }} | {{ value(comparison.wins.old_geomean_to_winner) }} | {{ value(comparison.wins.new_geomean_to_winner) }} | {{ value(comparison.wins.old_average_rank, 2) }} | {{ value(comparison.wins.new_average_rank, 2) }} |
+
+{% endif %}
+## By Mode
+
+| mode | rows | primary geomean | primary median | p95 geomean | p99 geomean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+{% for row in comparison.by_mode %}
+| {{ row.name }} | {{ row.rows }} | {{ value(row.primary_geomean_ratio) }} ({{ percent_delta(row.primary_geomean_ratio) }}) | {{ value(row.primary_median_ratio) }} ({{ percent_delta(row.primary_median_ratio) }}) | {{ value(row.p95_geomean_ratio) }} ({{ percent_delta(row.p95_geomean_ratio) }}) | {{ value(row.p99_geomean_ratio) }} ({{ percent_delta(row.p99_geomean_ratio) }}) |
+{% endfor %}
+
+## By Scenario
+
+| scenario | rows | primary geomean | primary median | p95 geomean | p99 geomean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+{% for row in comparison.by_scenario %}
+| {{ row.name }} | {{ row.rows }} | {{ value(row.primary_geomean_ratio) }} ({{ percent_delta(row.primary_geomean_ratio) }}) | {{ value(row.primary_median_ratio) }} ({{ percent_delta(row.primary_median_ratio) }}) | {{ value(row.p95_geomean_ratio) }} ({{ percent_delta(row.p95_geomean_ratio) }}) | {{ value(row.p99_geomean_ratio) }} ({{ percent_delta(row.p99_geomean_ratio) }}) |
+{% endfor %}
+
+## Top Improvements
+
+| row | old primary | new primary | delta | old p95 | new p95 | p95 delta | errors old -> new |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{% for row in comparison.top_improvements %}
+| {{ row.row.label }} | {{ value(row.old_primary, 1) }} | {{ value(row.new_primary, 1) }} | {{ percent_delta(row.primary_ratio) }} | {{ value(row.old_p95_ms, 2) }} | {{ value(row.new_p95_ms, 2) }} | {{ percent_delta(row.p95_ratio) }} | {{ row.old_errors_total }} -> {{ row.new_errors_total }} |
+{% endfor %}
+
+## Top Regressions
+
+| row | old primary | new primary | delta | old p95 | new p95 | p95 delta | errors old -> new |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{% for row in comparison.top_regressions %}
+| {{ row.row.label }} | {{ value(row.old_primary, 1) }} | {{ value(row.new_primary, 1) }} | {{ percent_delta(row.primary_ratio) }} | {{ value(row.old_p95_ms, 2) }} | {{ value(row.new_p95_ms, 2) }} | {{ percent_delta(row.p95_ratio) }} | {{ row.old_errors_total }} -> {{ row.new_errors_total }} |
+{% endfor %}
+
+## Error Rows In New Report
+
+{% if comparison.new_error_rows %}
+| row | errors | warmup errors | error rate |
+| --- | ---: | ---: | ---: |
+{% for row in comparison.new_error_rows %}
+| {{ row.label }} | {{ row.errors_total }} | {{ row.warmup_errors_total }} | {{ value(row.error_rate_percent, 2) }} |
+{% endfor %}
+{% else %}
+No error rows.
+{% endif %}
+
+## Resource Summary
+
+| metric | old | new |
+| --- | ---: | ---: |
+| max RSS MB | {{ value(comparison.resource_summary.old_rss_mb_max, 1) }} | {{ value(comparison.resource_summary.new_rss_mb_max, 1) }} |
+| max threads | {{ comparison.resource_summary.old_threads_max if comparison.resource_summary.old_threads_max is not none else "-" }} | {{ comparison.resource_summary.new_threads_max if comparison.resource_summary.new_threads_max is not none else "-" }} |
+| max fds | {{ comparison.resource_summary.old_fds_max if comparison.resource_summary.old_fds_max is not none else "-" }} | {{ comparison.resource_summary.new_fds_max if comparison.resource_summary.new_fds_max is not none else "-" }} |
+| errors total | {{ comparison.resource_summary.old_errors_total }} | {{ comparison.resource_summary.new_errors_total }} |
+
+## Coverage
+
+- Matched focus rows: `{{ comparison.overall.rows }}`
+- Unmatched old focus rows: `{{ comparison.unmatched_old_rows }}`
+- Unmatched new focus rows: `{{ comparison.unmatched_new_rows }}`

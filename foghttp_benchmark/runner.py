@@ -8,9 +8,11 @@ import inspect
 import random
 import time
 
+from foghttp_benchmark.clients.base import AsyncClientAdapter, SyncClientAdapter
 from foghttp_benchmark.constants import DEFAULT_MAX_REDIRECTS
 from foghttp_benchmark.load import run_load
-from foghttp_benchmark.models import ClientConfig, ClientSpec, RunResult, Scenario
+from foghttp_benchmark.models import ClientConfig, ClientSpec, LoadResult, RunResult, Scenario
+from foghttp_benchmark.progress import INNER_MILESTONE_PERCENT, ProgressReporter, is_progress_enabled, progress_stage
 from foghttp_benchmark.resources import ResourceSampler
 
 
@@ -48,6 +50,8 @@ async def run_once(
     repeat: int,
     warmup: int,
     max_redirects: int = DEFAULT_MAX_REDIRECTS,
+    progress: ProgressReporter | None = None,
+    progress_label: str | None = None,
 ) -> RunResult:
     request_limit = scenario.request_limit or concurrency
     config = ClientConfig(
@@ -59,14 +63,33 @@ async def run_once(
     )
     client = spec.factory(config)
     url = base_url + scenario.path
+    label = progress_label or f"{spec.mode}/{spec.name} {scenario.name} concurrency={concurrency} repeat={repeat}"
 
     try:
-        warmup_result = await run_load(client, scenario, url, concurrency, warmup, collect=False)
+        warmup_result = await run_load_with_progress(
+            client,
+            scenario,
+            url,
+            concurrency,
+            warmup,
+            collect=False,
+            progress=progress,
+            stage_name=f"Warmup load: {label}",
+        )
         gc.collect()
         cpu_start = time.process_time()
         started = time.perf_counter()
         async with ResourceSampler() as sampler:
-            load_result = await run_load(client, scenario, url, concurrency, requests, collect=True)
+            load_result = await run_load_with_progress(
+                client,
+                scenario,
+                url,
+                concurrency,
+                requests,
+                collect=True,
+                progress=progress,
+                stage_name=f"Measured load: {label}",
+            )
         duration = time.perf_counter() - started
         cpu = time.process_time() - cpu_start
         latencies = sorted(load_result.latencies_ms)
@@ -105,6 +128,37 @@ async def run_once(
         peak_fds=sampler.peak_fds,
         client_stats=client_stats,
     )
+
+
+async def run_load_with_progress(
+    client: AsyncClientAdapter | SyncClientAdapter,
+    scenario: Scenario,
+    url: str,
+    concurrency: int,
+    requests: int,
+    *,
+    collect: bool,
+    progress: ProgressReporter | None,
+    stage_name: str,
+) -> LoadResult:
+    if requests == 0 or not is_progress_enabled(progress):
+        return await run_load(client, scenario, url, concurrency, requests, collect=collect)
+    with progress_stage(
+        progress,
+        stage_name,
+        total=requests,
+        milestone_percent=INNER_MILESTONE_PERCENT,
+        plain_output="heartbeat",
+    ) as progress_step:
+        return await run_load(
+            client,
+            scenario,
+            url,
+            concurrency,
+            requests,
+            collect=collect,
+            progress=progress_step,
+        )
 
 
 def percentile(values: list[float], pct: float) -> float:

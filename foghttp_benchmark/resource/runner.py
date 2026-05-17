@@ -6,16 +6,24 @@ import inspect
 from queue import Empty, Queue
 import random
 import time
-from typing import Any
 
 from foghttp_benchmark.clients.base import AsyncClientAdapter, SyncClientAdapter
 from foghttp_benchmark.load import merge_load_results, outcome_matches, run_load
 from foghttp_benchmark.models import (
     ClientConfig,
     ClientSpec,
+    ClientStats,
     LoadResult,
     ResourceBackpressureResult,
+    ResponseOutcome,
     Scenario,
+)
+from foghttp_benchmark.progress import (
+    INNER_MILESTONE_PERCENT,
+    ProgressReporter,
+    ProgressStep,
+    is_progress_enabled,
+    progress_stage,
 )
 from foghttp_benchmark.resource.scenarios import ResourceCase
 from foghttp_benchmark.resources import ResourceSampler
@@ -35,6 +43,7 @@ async def run_resource_backpressure_benchmarks(
     max_redirects: int,
     shuffle: bool,
     seed: int,
+    progress: ProgressReporter | None = None,
 ) -> list[ResourceBackpressureResult]:
     plan = build_resource_plan(
         clients=clients,
@@ -45,19 +54,32 @@ async def run_resource_backpressure_benchmarks(
         seed=seed,
     )
     results: list[ResourceBackpressureResult] = []
-    for case, concurrency, spec, repeat in plan:
-        result = await run_resource_case(
-            spec=spec,
-            base_url=base_url,
-            secondary_base_url=secondary_base_url,
-            case=case,
-            concurrency=concurrency,
-            requests=requests,
-            warmup=warmup,
-            repeat=repeat,
-            max_redirects=max_redirects,
-        )
-        results.append(result)
+    with progress_stage(progress, "Resource/backpressure runs", total=len(plan)) as progress_step:
+        for case, concurrency, spec, repeat in plan:
+            label = resource_progress_label(
+                mode=spec.mode,
+                client=spec.name,
+                case=case.name,
+                concurrency=concurrency,
+                repeat=repeat,
+                repeats=repeats,
+            )
+            progress_step.update(label)
+            result = await run_resource_case(
+                spec=spec,
+                base_url=base_url,
+                secondary_base_url=secondary_base_url,
+                case=case,
+                concurrency=concurrency,
+                requests=requests,
+                warmup=warmup,
+                repeat=repeat,
+                max_redirects=max_redirects,
+                progress=progress,
+                progress_label=label,
+            )
+            results.append(result)
+            progress_step.advance(label)
     return results
 
 
@@ -81,6 +103,18 @@ def build_resource_plan(
     return plan
 
 
+def resource_progress_label(
+    *,
+    mode: str,
+    client: str,
+    case: str,
+    concurrency: int,
+    repeat: int,
+    repeats: int,
+) -> str:
+    return f"{mode}/{client} {case} concurrency={concurrency} repeat={repeat}/{repeats}"
+
+
 async def run_resource_case(
     *,
     spec: ClientSpec,
@@ -92,6 +126,8 @@ async def run_resource_case(
     warmup: int,
     repeat: int,
     max_redirects: int,
+    progress: ProgressReporter | None = None,
+    progress_label: str | None = None,
 ) -> ResourceBackpressureResult:
     max_pending_requests = case.max_pending_requests
     if max_pending_requests is None:
@@ -110,19 +146,20 @@ async def run_resource_case(
     scenario = scenario_from_case(case)
     url = base_url + case.path
     secondary_url = None if case.secondary_path is None else secondary_base_url + case.secondary_path
+    label = progress_label or f"{spec.mode}/{spec.name} {case.name} concurrency={concurrency} repeat={repeat}"
     client = spec.factory(config)
     load_result = LoadResult([], 0, {})
     warmup_result = LoadResult([], 0, {})
     duration = 0.0
     peak_active_requests: int | None = None
     peak_pending_requests: int | None = None
-    client_stats: dict[str, Any] | None = None
+    client_stats: ClientStats | None = None
     recovery_ok: bool | None = None
     recovery_error: str | None = None
     sampler: ResourceSampler | None = None
 
     try:
-        warmup_result = await run_case_load(
+        warmup_result = await run_case_load_with_progress(
             client,
             scenario,
             url,
@@ -130,10 +167,12 @@ async def run_resource_case(
             concurrency,
             warmup,
             collect=False,
+            progress=progress,
+            stage_name=f"Warmup resource load: {label}",
         )
         started = time.perf_counter()
         async with ResourceSampler() as sampler, TransportStatsSampler(client) as stats_sampler:
-            load_result = await run_case_load(
+            load_result = await run_case_load_with_progress(
                 client,
                 scenario,
                 url,
@@ -141,6 +180,8 @@ async def run_resource_case(
                 concurrency,
                 requests,
                 collect=True,
+                progress=progress,
+                stage_name=f"Measured resource load: {label}",
             )
         duration = time.perf_counter() - started
         peak_active_requests = stats_sampler.peak_active_requests
@@ -228,9 +269,10 @@ async def run_case_load(
     requests: int,
     *,
     collect: bool,
+    progress: ProgressStep | None = None,
 ) -> LoadResult:
     if secondary_url is None:
-        return await run_load(client, scenario, url, concurrency, requests, collect=collect)
+        return await run_load(client, scenario, url, concurrency, requests, collect=collect, progress=progress)
     if requests == 0:
         return LoadResult([], 0, {})
     if isinstance(client, AsyncClientAdapter):
@@ -242,6 +284,7 @@ async def run_case_load(
             concurrency,
             requests,
             collect=collect,
+            progress=progress,
         )
     return await asyncio.to_thread(
         run_sync_mixed_origin_load,
@@ -252,7 +295,49 @@ async def run_case_load(
         concurrency,
         requests,
         collect=collect,
+        progress=progress,
     )
+
+
+async def run_case_load_with_progress(
+    client: AsyncClientAdapter | SyncClientAdapter,
+    scenario: Scenario,
+    url: str,
+    secondary_url: str | None,
+    concurrency: int,
+    requests: int,
+    *,
+    collect: bool,
+    progress: ProgressReporter | None,
+    stage_name: str,
+) -> LoadResult:
+    if requests == 0 or not is_progress_enabled(progress):
+        return await run_case_load(
+            client,
+            scenario,
+            url,
+            secondary_url,
+            concurrency,
+            requests,
+            collect=collect,
+        )
+    with progress_stage(
+        progress,
+        stage_name,
+        total=requests,
+        milestone_percent=INNER_MILESTONE_PERCENT,
+        plain_output="heartbeat",
+    ) as progress_step:
+        return await run_case_load(
+            client,
+            scenario,
+            url,
+            secondary_url,
+            concurrency,
+            requests,
+            collect=collect,
+            progress=progress_step,
+        )
 
 
 async def run_async_mixed_origin_load(
@@ -264,6 +349,7 @@ async def run_async_mixed_origin_load(
     requests: int,
     *,
     collect: bool,
+    progress: ProgressStep | None = None,
 ) -> LoadResult:
     queue: asyncio.Queue[int] = asyncio.Queue()
     for index in range(requests):
@@ -290,6 +376,8 @@ async def run_async_mixed_origin_load(
                 if collect:
                     latencies.append((time.perf_counter_ns() - started) / 1_000_000)
                 queue.task_done()
+                if progress is not None:
+                    progress.advance()
 
     workers = [asyncio.create_task(worker()) for _ in range(min(concurrency, requests))]
     await queue.join()
@@ -306,6 +394,7 @@ def run_sync_mixed_origin_load(
     requests: int,
     *,
     collect: bool,
+    progress: ProgressStep | None = None,
 ) -> LoadResult:
     queue: Queue[int] = Queue()
     for index in range(requests):
@@ -332,6 +421,8 @@ def run_sync_mixed_origin_load(
                 if collect:
                     latencies.append((time.perf_counter_ns() - started) / 1_000_000)
                 queue.task_done()
+                if progress is not None:
+                    progress.advance()
 
     with ThreadPoolExecutor(max_workers=min(concurrency, requests)) as executor:
         results = list(executor.map(lambda _index: worker(), range(min(concurrency, requests))))
@@ -362,7 +453,7 @@ async def request_once(
     client: AsyncClientAdapter | SyncClientAdapter,
     scenario: Scenario,
     url: str,
-) -> Any:
+) -> ResponseOutcome:
     if isinstance(client, AsyncClientAdapter):
         return await client.request(scenario, url)
     return await asyncio.to_thread(client.request, scenario, url)
