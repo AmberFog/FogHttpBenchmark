@@ -23,11 +23,11 @@ class ResourceAggregateRow:
     p99_ms_median: float
     duration_s_median: float
     duration_s_cv_percent: float
-    rss_mb_max: float | int | None
-    threads_max: float | int | None
-    fds_max: float | int | None
-    peak_active_requests_max: float | int | None
-    peak_pending_requests_max: float | int | None
+    rss_mb_max: float | None
+    threads_max: int | None
+    fds_max: int | None
+    peak_active_requests_max: int | None
+    peak_pending_requests_max: int | None
     final_failed_requests_max: int | None
     final_pool_timeouts_max: int | None
     recovery_failures: int

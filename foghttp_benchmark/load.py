@@ -11,6 +11,7 @@ import time
 
 from foghttp_benchmark.clients.base import AsyncClientAdapter, SyncClientAdapter
 from foghttp_benchmark.models import LoadResult, ResponseOutcome, Scenario
+from foghttp_benchmark.progress import ProgressStep
 
 
 async def run_load(
@@ -21,12 +22,22 @@ async def run_load(
     requests: int,
     *,
     collect: bool,
+    progress: ProgressStep | None = None,
 ) -> LoadResult:
     if requests == 0:
         return LoadResult([], 0, {})
     if isinstance(client, AsyncClientAdapter):
-        return await run_async_load(client, scenario, url, concurrency, requests, collect=collect)
-    return await asyncio.to_thread(run_sync_load, client, scenario, url, concurrency, requests, collect=collect)
+        return await run_async_load(client, scenario, url, concurrency, requests, collect=collect, progress=progress)
+    return await asyncio.to_thread(
+        run_sync_load,
+        client,
+        scenario,
+        url,
+        concurrency,
+        requests,
+        collect=collect,
+        progress=progress,
+    )
 
 
 async def run_async_load(
@@ -37,6 +48,7 @@ async def run_async_load(
     requests: int,
     *,
     collect: bool,
+    progress: ProgressStep | None = None,
 ) -> LoadResult:
     queue: asyncio.Queue[int] = asyncio.Queue()
     for index in range(requests):
@@ -62,6 +74,8 @@ async def run_async_load(
                 if collect:
                     latencies.append((time.perf_counter_ns() - started) / 1_000_000)
                 queue.task_done()
+                if progress is not None:
+                    progress.advance()
 
     workers = [asyncio.create_task(worker()) for _ in range(min(concurrency, requests))]
     await queue.join()
@@ -77,6 +91,7 @@ def run_sync_load(
     requests: int,
     *,
     collect: bool,
+    progress: ProgressStep | None = None,
 ) -> LoadResult:
     queue: Queue[int] = Queue()
     for index in range(requests):
@@ -102,6 +117,8 @@ def run_sync_load(
                 if collect:
                     latencies.append((time.perf_counter_ns() - started) / 1_000_000)
                 queue.task_done()
+                if progress is not None:
+                    progress.advance()
 
     with ThreadPoolExecutor(max_workers=min(concurrency, requests)) as executor:
         results = list(executor.map(lambda _index: worker(), range(min(concurrency, requests))))

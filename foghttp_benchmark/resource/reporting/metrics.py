@@ -10,13 +10,13 @@ __all__ = (
 
 from collections.abc import Callable, Iterable, Sequence
 import statistics
-from typing import Literal
+from typing import TypeVar
 
 from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES
-from foghttp_benchmark.models import ResourceBackpressureResult
+from foghttp_benchmark.models import ClientStatKey, ResourceBackpressureResult
 
 
-ClientStatKey = Literal["failed_requests", "pool_acquire_timeouts"]
+OptionalMaxValue = TypeVar("OptionalMaxValue", int, float)
 
 
 def sum_metric(
@@ -48,7 +48,7 @@ def coefficient_of_variation(values: Sequence[float]) -> float:
     return (statistics.stdev(values) / mean) * 100
 
 
-def optional_max(values: Iterable[float | int | None]) -> float | int | None:
+def optional_max(values: Iterable[OptionalMaxValue | None]) -> OptionalMaxValue | None:
     present = [value for value in values if value is not None]
     return max(present) if present else None
 

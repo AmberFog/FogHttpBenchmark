@@ -4,6 +4,9 @@ __all__ = (
     "ClientCreationResult",
     "ClientFactory",
     "ClientSpec",
+    "ClientStatKey",
+    "ClientStats",
+    "JsonObject",
     "LoadResult",
     "ResourceBackpressureResult",
     "ResponseOutcome",
@@ -13,7 +16,7 @@ __all__ = (
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 
 if TYPE_CHECKING:
@@ -54,6 +57,15 @@ class ClientConfig:
 
 
 ClientFactory: TypeAlias = Callable[[ClientConfig], "AsyncClientAdapter | SyncClientAdapter"]
+ClientStatKey: TypeAlias = Literal[
+    "active_requests",
+    "pending_requests",
+    "total_requests",
+    "failed_requests",
+    "pool_acquire_timeouts",
+]
+ClientStats: TypeAlias = dict[ClientStatKey, int]
+JsonObject: TypeAlias = dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -69,7 +81,7 @@ class Scenario:
     method: str
     path: str
     body: bytes | None = None
-    json_body: dict[str, Any] | None = None
+    json_body: JsonObject | None = None
     expected_status: int = 200
     expected_json_keys: tuple[str, ...] = ()
     expected_content_length: int | None = None
@@ -123,7 +135,7 @@ class RunResult:
     peak_rss_mb: float | None
     peak_threads: int | None
     peak_fds: int | None
-    client_stats: dict[str, Any] | None
+    client_stats: ClientStats | None
 
 
 @dataclass
@@ -182,6 +194,6 @@ class ResourceBackpressureResult:
     peak_fds: int | None
     peak_active_requests: int | None
     peak_pending_requests: int | None
-    client_stats: dict[str, Any] | None
+    client_stats: ClientStats | None
     recovery_ok: bool | None
     recovery_error: str | None

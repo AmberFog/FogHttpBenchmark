@@ -89,6 +89,35 @@ Each run writes timestamped JSON and Markdown reports plus `latest.json` and
 ignored by git by default. Publish selected reports intentionally when they are
 part of a release or benchmark note.
 
+## Compare Reports
+
+Use `compare` to turn two JSON reports from the same suite into a compact
+Markdown delta report:
+
+```bash
+uv run foghttp-benchmark compare \
+  results/full-requests/latest.json \
+  results/full-requests-0.2.1/latest.json \
+  --output results/compare-requests.md
+```
+
+The comparison highlights geomean and median ratios, competitive wins,
+per-mode/per-scenario deltas, top improvements, top regressions, error rows,
+resource peaks, and unmatched focus rows.
+
+## Progress Output
+
+Benchmark runs show stages and completed run counts by default. Use
+`--no-progress` for quiet machine-readable runs:
+
+```bash
+uv run foghttp-benchmark --no-progress --output-dir results/local
+```
+
+Interactive terminals use Rich progress bars. Plain log output keeps outer
+suite milestones, while inner request-load progress is emitted as a heartbeat
+only for long-running stages.
+
 ## Methodology
 
 - Benchmarks use a local asyncio HTTP/1.1 loopback server.
