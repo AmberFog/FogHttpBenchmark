@@ -7,7 +7,7 @@ and treats it as an external user-facing dependency.
 The goal is not marketing-perfect numbers. The goal is a repeatable, readable
 harness that shows real trade-offs across buffered HTTP workloads, redirects,
 pool contention, delay scenarios, resource usage, and client lifecycle cost.
-For FogHTTP `0.2.x`, the harness also includes a dedicated
+For FogHTTP `0.3.x`, the harness also includes a dedicated
 resource/backpressure suite for active request limits, per-origin limits,
 pending queues, pool timeouts, and buffered response body limits.
 
@@ -29,7 +29,7 @@ uv sync
 The project dependency on `foghttp` is resolved from PyPI:
 
 ```toml
-"foghttp>=0.2,<0.3"
+"foghttp>=0.3,<0.4"
 ```
 
 To benchmark a different released version, change the dependency constraint and
