@@ -1,0 +1,33 @@
+{% macro value(value, precision=2) -%}
+{% if value is none -%}
+-
+{%- else -%}
+{{ ("%%.%df" % precision)|format(value) }}
+{%- endif %}
+{%- endmacro %}
+# FogHTTP one-upstream benchmark results
+
+- Timestamp: `{{ timestamp }}`
+- Python: `{{ python_version }}`
+- Platform: `{{ platform_name }}`
+- Server: `local asyncio HTTP/1.1 loopback server`
+- Requests/run: `{{ args.requests }}`
+- Warmup/run: `{{ args.warmup }}`
+- Repeats: `{{ args.repeats }}`
+- Shuffle seed: `{{ args.seed }}`
+
+{% if skipped %}
+## Skipped clients
+
+{% for name, reason in skipped.items() %}
+- `{{ name }}`: {{ reason }}
+{% endfor %}
+
+{% endif %}
+## Aggregate
+
+| mode | client | group | case | profile | conc | ok/s median | direct ratio | p95 ms | p99 ms | errors % | max RSS MB | max threads | max fds | error types |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+{% for row in aggregate %}
+| {{ row.mode }} | {{ row.client }} | {{ row.group }} | {{ row.case }} | {{ row.profile }} | {{ row.concurrency }} | {{ value(row.ok_req_s_median, 1) }} | {{ value(row.baseline_ratio, 3) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ value(row.error_rate_percent, 2) }} | {{ value(row.rss_mb_max, 1) }} | {{ row.threads_max }} | {{ row.fds_max }} | `{{ row.error_types }}` |
+{% endfor %}
