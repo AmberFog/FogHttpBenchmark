@@ -12,6 +12,7 @@ class ResourceAggregateRow:
     request_limit: int
     per_origin_request_limit: int | None
     max_pending_requests: int
+    max_buffered_response_bytes: int | None
     requests: int
     repeats: int
     ok_requests_total: int
@@ -28,7 +29,10 @@ class ResourceAggregateRow:
     fds_max: int | None
     peak_active_requests_max: int | None
     peak_pending_requests_max: int | None
+    peak_buffered_response_bytes_max: int | None
     final_failed_requests_max: int | None
     final_pool_timeouts_max: int | None
+    final_buffered_response_bytes_max: int | None
+    final_buffered_response_budget_rejections_max: int | None
     recovery_failures: int
     error_types: dict[str, int]

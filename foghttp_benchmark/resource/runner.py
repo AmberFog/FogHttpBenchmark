@@ -138,6 +138,7 @@ async def run_resource_case(
         per_origin_request_limit=case.per_origin_request_limit,
         max_pending_requests=max_pending_requests,
         max_response_body_size=case.max_response_body_size,
+        max_buffered_response_bytes=case.max_buffered_response_bytes,
         follow_redirects=False,
         max_redirects=max_redirects,
         pool_timeout_s=case.pool_timeout_s,
@@ -153,6 +154,7 @@ async def run_resource_case(
     duration = 0.0
     peak_active_requests: int | None = None
     peak_pending_requests: int | None = None
+    peak_buffered_response_bytes: int | None = None
     client_stats: ClientStats | None = None
     recovery_ok: bool | None = None
     recovery_error: str | None = None
@@ -186,6 +188,7 @@ async def run_resource_case(
         duration = time.perf_counter() - started
         peak_active_requests = stats_sampler.peak_active_requests
         peak_pending_requests = stats_sampler.peak_pending_requests
+        peak_buffered_response_bytes = stats_sampler.peak_buffered_response_bytes
         client_stats = client.stats()
         recovery_ok, recovery_error = await run_recovery_check(
             client=client,
@@ -208,6 +211,7 @@ async def run_resource_case(
         per_origin_request_limit=case.per_origin_request_limit,
         max_pending_requests=max_pending_requests,
         max_response_body_size=case.max_response_body_size,
+        max_buffered_response_bytes=case.max_buffered_response_bytes,
         pool_timeout_s=case.pool_timeout_s,
         requests=requests,
         warmup=warmup,
@@ -226,6 +230,7 @@ async def run_resource_case(
         peak_fds=None if sampler is None else sampler.peak_fds,
         peak_active_requests=peak_active_requests,
         peak_pending_requests=peak_pending_requests,
+        peak_buffered_response_bytes=peak_buffered_response_bytes,
         client_stats=client_stats,
         recovery_ok=recovery_ok,
         recovery_error=recovery_error,
@@ -465,6 +470,7 @@ class TransportStatsSampler:
         self.interval = interval
         self.peak_active_requests: int | None = None
         self.peak_pending_requests: int | None = None
+        self.peak_buffered_response_bytes: int | None = None
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
@@ -490,7 +496,10 @@ class TransportStatsSampler:
             return
         active = stats.get("active_requests")
         pending = stats.get("pending_requests")
+        buffered_response_bytes = stats.get("buffered_response_bytes")
         if isinstance(active, int):
             self.peak_active_requests = max(self.peak_active_requests or 0, active)
         if isinstance(pending, int):
             self.peak_pending_requests = max(self.peak_pending_requests or 0, pending)
+        if isinstance(buffered_response_bytes, int):
+            self.peak_buffered_response_bytes = max(self.peak_buffered_response_bytes or 0, buffered_response_bytes)

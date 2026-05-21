@@ -50,6 +50,7 @@ class ClientConfig:
     max_pending_requests: int | None = None
     per_origin_request_limit: int | None = None
     max_response_body_size: int | None = None
+    max_buffered_response_bytes: int | None = None
     idle_connection_limit: int | None = None
     runtime_workers: int | None = None
     pool_timeout_s: float = 5.0
@@ -60,9 +61,18 @@ ClientFactory: TypeAlias = Callable[[ClientConfig], "AsyncClientAdapter | SyncCl
 ClientStatKey: TypeAlias = Literal[
     "active_requests",
     "pending_requests",
+    "peak_pending_requests",
     "total_requests",
     "failed_requests",
+    "pool_acquire_attempts",
+    "pool_acquire_immediate",
+    "pool_acquire_waited",
     "pool_acquire_timeouts",
+    "pool_acquire_wait_time_total_ns",
+    "pool_acquire_wait_time_max_ns",
+    "pool_acquire_wait_time_last_ns",
+    "buffered_response_bytes",
+    "buffered_response_budget_rejections",
 ]
 ClientStats: TypeAlias = dict[ClientStatKey, int]
 JsonObject: TypeAlias = dict[str, object]
@@ -176,6 +186,7 @@ class ResourceBackpressureResult:
     per_origin_request_limit: int | None
     max_pending_requests: int
     max_response_body_size: int | None
+    max_buffered_response_bytes: int | None
     pool_timeout_s: float
     requests: int
     warmup: int
@@ -194,6 +205,7 @@ class ResourceBackpressureResult:
     peak_fds: int | None
     peak_active_requests: int | None
     peak_pending_requests: int | None
+    peak_buffered_response_bytes: int | None
     client_stats: ClientStats | None
     recovery_ok: bool | None
     recovery_error: str | None

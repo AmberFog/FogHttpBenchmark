@@ -1,13 +1,15 @@
 __all__ = ("RequestAggregateRow", "aggregate_results", "write_reports")
 
 from dataclasses import asdict, dataclass
-from importlib import metadata
+from importlib import import_module, metadata
 import json
 from pathlib import Path
 import platform
 import statistics
 import sys
 import time
+import tomllib
+from types import ModuleType
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -99,6 +101,7 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
             "python": sys.version,
             "platform": platform.platform(),
             "server": "local asyncio HTTP/1.1 loopback server",
+            "suite": args.suite,
             "args": vars(args),
             "package_versions": package_versions(
                 ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
@@ -152,8 +155,63 @@ def report_environment() -> Environment:
 def package_versions(names: list[str]) -> dict[str, str]:
     versions: dict[str, str] = {}
     for name in names:
-        try:
-            versions[name] = metadata.version(name)
-        except metadata.PackageNotFoundError:
-            versions[name] = "not installed"
+        versions[name] = package_version(name)
     return versions
+
+
+def package_version(name: str) -> str:
+    installed_version = installed_package_version(name)
+    imported_version = imported_project_version(name)
+    if imported_version is None or imported_version == installed_version:
+        return installed_version
+    if installed_version == "not installed":
+        return f"{imported_version} (imported)"
+    return f"{imported_version} (imported; installed {installed_version})"
+
+
+def installed_package_version(name: str) -> str:
+    try:
+        return metadata.version(name)
+    except metadata.PackageNotFoundError:
+        return "not installed"
+
+
+def imported_project_version(name: str) -> str | None:
+    try:
+        module = import_module(name)
+    except ImportError:
+        return None
+    return project_version_from_module(name, module)
+
+
+def project_version_from_module(name: str, module: ModuleType) -> str | None:
+    module_file = getattr(module, "__file__", None)
+    if not isinstance(module_file, str):
+        return None
+    return project_version_from_module_file(name, module_file)
+
+
+def project_version_from_module_file(name: str, module_file: str) -> str | None:
+    module_path = Path(module_file).resolve()
+    for parent in [module_path.parent, *module_path.parents]:
+        version = project_version_from_pyproject(name, parent / "pyproject.toml")
+        if version is not None:
+            return version
+    return None
+
+
+def project_version_from_pyproject(name: str, path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        pyproject = tomllib.loads(path.read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    project = pyproject.get("project")
+    if not isinstance(project, dict):
+        return None
+    project_name = project.get("name")
+    version = project.get("version")
+    if project_name != name or not isinstance(version, str):
+        return None
+    return version

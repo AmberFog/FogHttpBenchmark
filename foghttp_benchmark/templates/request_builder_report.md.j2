@@ -1,0 +1,33 @@
+{% macro value(value, precision=2) -%}
+{% if value is none -%}
+-
+{%- else -%}
+{{ ("%%.%df" % precision)|format(value) }}
+{%- endif %}
+{%- endmacro %}
+# FogHTTP request builder benchmark results
+
+- Timestamp: `{{ timestamp }}`
+- Python: `{{ python_version }}`
+- Platform: `{{ platform_name }}`
+- Server: `none for build cases; local asyncio HTTP/1.1 loopback server for send-prepared cases`
+- Iterations/run: `{{ args.iterations }}`
+- Warmup/run: `{{ args.warmup }}`
+- Repeats: `{{ args.repeats }}`
+- Shuffle seed: `{{ args.seed }}`
+
+{% if skipped %}
+## Skipped clients
+
+{% for name, reason in skipped.items() %}
+- `{{ name }}`: {{ reason }}
+{% endfor %}
+
+{% endif %}
+## Aggregate
+
+| mode | client | kind | group | case | profile | iters | ops/s median | baseline ratio | p50 ms | p95 ms | p99 ms | errors | max RSS MB | max threads | max fds | error types |
+| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+{% for row in aggregate %}
+| {{ row.mode }} | {{ row.client }} | {{ row.kind }} | {{ row.group }} | {{ row.case }} | {{ row.profile }} | {{ row.iterations }} | {{ value(row.ops_s_median, 1) }} | {{ value(row.baseline_ratio, 3) }} | {{ value(row.p50_ms_median, 4) }} | {{ value(row.p95_ms_median, 4) }} | {{ value(row.p99_ms_median, 4) }} | {{ row.errors_total }} | {{ value(row.rss_mb_max, 1) }} | {{ row.threads_max }} | {{ row.fds_max }} | `{{ row.error_types }}` |
+{% endfor %}
