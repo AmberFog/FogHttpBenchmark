@@ -9,7 +9,10 @@ harness that shows real trade-offs across buffered HTTP workloads, redirects,
 pool contention, delay scenarios, resource usage, and client lifecycle cost.
 For FogHTTP `0.3.x`, the harness also includes a dedicated
 resource/backpressure suite for active request limits, per-origin limits,
-pending queues, pool timeouts, and buffered response body limits.
+pending queues, pool timeouts, and buffered response body limits, plus a
+one-upstream API client suite for `base_url`, client defaults, params merging,
+prepared requests, and request body encoding. It also includes a request
+builder suite for Python-side `build_request()` and query construction cost.
 
 ## What It Measures
 
@@ -19,6 +22,8 @@ pending queues, pool timeouts, and buffered response body limits.
 - local pool contention and delayed responses
 - peak RSS, thread count, and file descriptor pressure
 - client creation, first request, reuse, and close cost
+- one-upstream API client overhead for defaults and prepared requests
+- pure request builder overhead before network I/O
 
 ## Install
 
@@ -77,10 +82,47 @@ uv run foghttp-benchmark \
   --output-dir results/resource-backpressure
 ```
 
-This suite is FogHTTP-specific because it uses `TransportStats` from the public
-`0.2.x` API. It checks global active request slots, per-origin active request
+This suite is FogHTTP-specific because it uses FogHTTP public transport
+diagnostics. It checks global active request slots, per-origin active request
 slots, bounded pending requests, `PoolTimeout` behavior, recovery after timeout
 bursts, and `max_response_body_size` cleanup.
+
+## One-Upstream API Client Benchmark
+
+```bash
+uv run foghttp-benchmark \
+  --suite one-upstream \
+  --clients foghttp,httpx,aiohttp,zapros \
+  --modes async,sync \
+  --requests 1000 \
+  --warmup 100 \
+  --repeats 3 \
+  --concurrency 1,10,50 \
+  --output-dir results/one-upstream
+```
+
+This suite compares `foghttp` and `httpx` in the common service-client pattern:
+one upstream per client, `base_url`, default headers, default params,
+per-request params, JSON/form bodies, and prepared requests. Clients without a
+semantics-compatible defaults API are reported as skipped.
+
+## Request Builder Benchmark
+
+```bash
+uv run foghttp-benchmark \
+  --suite request-builder \
+  --clients foghttp,httpx,aiohttp,zapros \
+  --modes async,sync \
+  --iterations 5000 \
+  --warmup 500 \
+  --repeats 3 \
+  --output-dir results/request-builder
+```
+
+This suite measures Python-side `build_request()` cost separately from network
+I/O. Pure build cases do not start a server. The `send-prepared-get` case starts
+the local loopback server and measures the combined build-plus-send path through
+a reused client. Unsupported clients are reported as skipped.
 
 ## Outputs
 

@@ -18,7 +18,14 @@ from typing import Literal, TypeAlias
 
 
 JsonObject: TypeAlias = dict[str, object]
-BenchmarkSuite: TypeAlias = Literal["requests", "client-creation", "resource-backpressure", "unknown"]
+BenchmarkSuite: TypeAlias = Literal[
+    "requests",
+    "client-creation",
+    "resource-backpressure",
+    "one-upstream",
+    "request-builder",
+    "unknown",
+]
 
 
 @dataclass(frozen=True, slots=True)

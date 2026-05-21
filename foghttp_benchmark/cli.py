@@ -17,11 +17,15 @@ from foghttp_benchmark.constants import (
     DEFAULT_CREATION_ITERATIONS,
     DEFAULT_MAX_REDIRECTS,
     DEFAULT_MODES,
+    DEFAULT_ONE_UPSTREAM_SCENARIOS,
     DEFAULT_REPEATS,
+    DEFAULT_REQUEST_BUILDER_SCENARIOS,
     DEFAULT_REQUESTS,
     DEFAULT_RESOURCE_SCENARIOS,
     DEFAULT_SCENARIOS,
     DEFAULT_WARMUP,
+    ONE_UPSTREAM_SUITE,
+    REQUEST_BUILDER_SUITE,
     REQUESTS_SUITE,
     RESOURCE_BACKPRESSURE_SUITE,
     RESULTS_DIR,
@@ -29,8 +33,20 @@ from foghttp_benchmark.constants import (
 from foghttp_benchmark.creation import run_client_creation_benchmarks
 from foghttp_benchmark.creation_reports import write_creation_reports
 from foghttp_benchmark.models import BenchmarkArgs, ClientSpec
+from foghttp_benchmark.one_upstream import (
+    available_one_upstream_clients,
+    one_upstream_cases,
+    run_one_upstream_benchmarks,
+    write_one_upstream_reports,
+)
 from foghttp_benchmark.progress import BenchmarkProgress, ProgressReporter, progress_stage, progress_status
 from foghttp_benchmark.reports import write_reports
+from foghttp_benchmark.request_builder import (
+    available_request_builder_clients,
+    request_builder_cases,
+    run_request_builder_benchmarks,
+    write_request_builder_reports,
+)
 from foghttp_benchmark.resource import resource_cases, run_resource_backpressure_benchmarks
 from foghttp_benchmark.resource.reporting.reports import write_resource_reports
 from foghttp_benchmark.runner import build_plan, run_once
@@ -38,7 +54,9 @@ from foghttp_benchmark.scenarios import scenarios
 from foghttp_benchmark.server import benchmark_server
 from foghttp_benchmark.validation import (
     validate_client_creation_args,
+    validate_one_upstream_args,
     validate_request_benchmark_args,
+    validate_request_builder_args,
     validate_resource_backpressure_args,
     validate_suite,
 )
@@ -60,13 +78,19 @@ def main(
     ctx: typer.Context,
     suite: Annotated[
         str,
-        typer.Option(help="Benchmark suite: requests, client-creation, or resource-backpressure."),
+        typer.Option(
+            help=(
+                "Benchmark suite: requests, client-creation, resource-backpressure, one-upstream, or request-builder."
+            ),
+        ),
     ] = REQUESTS_SUITE,
     clients: Annotated[str, typer.Option(help="Comma-separated clients to benchmark.")] = DEFAULT_CLIENTS,
     modes: Annotated[str, typer.Option(help="Comma-separated modes: async, sync.")] = DEFAULT_MODES,
     concurrency: Annotated[str, typer.Option(help="Comma-separated concurrency levels.")] = DEFAULT_CONCURRENCY,
     requests: Annotated[int, typer.Option(help="Measured requests per run.")] = DEFAULT_REQUESTS,
-    warmup: Annotated[int, typer.Option(help="Warmup requests per run, excluded from metrics.")] = DEFAULT_WARMUP,
+    warmup: Annotated[int, typer.Option(help="Warmup requests or iterations per run, excluded from metrics.")] = (
+        DEFAULT_WARMUP
+    ),
     repeats: Annotated[int, typer.Option(help="Measured repeats for each client/scenario/concurrency tuple.")] = (
         DEFAULT_REPEATS
     ),
@@ -80,7 +104,7 @@ def main(
     ] = False,
     output_dir: Annotated[str, typer.Option(help="Directory for JSON and Markdown reports.")] = str(RESULTS_DIR),
     scenarios: Annotated[str, typer.Option(help="Comma-separated benchmark scenarios.")] = DEFAULT_SCENARIOS,
-    iterations: Annotated[int, typer.Option(help="Iterations for client creation benchmarks.")] = (
+    iterations: Annotated[int, typer.Option(help="Iterations for client creation and request builder benchmarks.")] = (
         DEFAULT_CREATION_ITERATIONS
     ),
     client_counts: Annotated[str, typer.Option(help="Comma-separated client counts for creation benchmarks.")] = (
@@ -147,6 +171,13 @@ async def run_benchmark(args: BenchmarkArgs, *, show_progress: bool = True) -> N
         validate_suite(args.suite)
         requested_clients = parse_csv(args.clients)
         requested_modes = parse_csv(args.modes)
+        if args.suite == ONE_UPSTREAM_SUITE:
+            await run_one_upstream_suite(args, progress=progress)
+            return
+        if args.suite == REQUEST_BUILDER_SUITE:
+            await run_request_builder_suite(args, progress=progress)
+            return
+
         clients, skipped = available_clients(requested_clients, requested_modes)
         if not clients:
             msg = f"No requested clients are available: {skipped}"
@@ -158,7 +189,6 @@ async def run_benchmark(args: BenchmarkArgs, *, show_progress: bool = True) -> N
         if args.suite == RESOURCE_BACKPRESSURE_SUITE:
             await run_resource_backpressure_suite(args, clients, skipped, progress=progress)
             return
-
         await run_request_suite(args, clients, skipped, progress=progress)
 
 
@@ -296,6 +326,95 @@ async def run_resource_backpressure_suite(
     write_resource_reports(results, skipped, args)
 
 
+async def run_one_upstream_suite(
+    args: BenchmarkArgs,
+    *,
+    progress: ProgressReporter | None = None,
+) -> None:
+    progress_status(progress, "Building one-upstream benchmark plan")
+    requested_clients = parse_csv(args.clients)
+    requested_modes = parse_csv(args.modes)
+    clients, skipped = available_one_upstream_clients(requested_clients, requested_modes)
+    if not clients:
+        msg = "one-upstream suite requires foghttp or httpx clients"
+        raise ValueError(msg)
+    case_map = one_upstream_cases()
+    requested_cases = one_upstream_scenario_names(args.scenarios)
+    concurrency_levels = parse_int_csv(args.concurrency)
+    validate_one_upstream_args(
+        args,
+        requested_cases=requested_cases,
+        case_map=case_map,
+        concurrency_levels=concurrency_levels,
+    )
+    cases = [case_map[name] for name in requested_cases]
+    progress_status(progress, "Starting local benchmark server")
+    async with benchmark_server() as base_url:
+        results = await run_one_upstream_benchmarks(
+            clients=clients,
+            base_url=base_url,
+            cases=cases,
+            concurrency_levels=concurrency_levels,
+            requests=args.requests,
+            warmup=args.warmup,
+            repeats=args.repeats,
+            shuffle=not args.no_shuffle,
+            seed=args.seed,
+            progress=progress,
+        )
+
+    progress_status(progress, "Writing one-upstream reports")
+    write_one_upstream_reports(results, skipped, args)
+
+
+async def run_request_builder_suite(
+    args: BenchmarkArgs,
+    *,
+    progress: ProgressReporter | None = None,
+) -> None:
+    progress_status(progress, "Building request builder benchmark plan")
+    requested_clients = parse_csv(args.clients)
+    requested_modes = parse_csv(args.modes)
+    clients, skipped = available_request_builder_clients(requested_clients, requested_modes)
+    if not clients:
+        msg = "request-builder suite requires foghttp or httpx clients"
+        raise ValueError(msg)
+    case_map = request_builder_cases()
+    requested_cases = request_builder_scenario_names(args.scenarios)
+    validate_request_builder_args(args, requested_cases=requested_cases, case_map=case_map)
+    cases = [case_map[name] for name in requested_cases]
+    base_url = "http://127.0.0.1:1"
+    if any(case.kind == "send-prepared" for case in cases):
+        progress_status(progress, "Starting local benchmark server")
+        async with benchmark_server() as server_base_url:
+            results = await run_request_builder_benchmarks(
+                clients=clients,
+                base_url=server_base_url,
+                cases=cases,
+                iterations=args.iterations,
+                warmup=args.warmup,
+                repeats=args.repeats,
+                shuffle=not args.no_shuffle,
+                seed=args.seed,
+                progress=progress,
+            )
+    else:
+        results = await run_request_builder_benchmarks(
+            clients=clients,
+            base_url=base_url,
+            cases=cases,
+            iterations=args.iterations,
+            warmup=args.warmup,
+            repeats=args.repeats,
+            shuffle=not args.no_shuffle,
+            seed=args.seed,
+            progress=progress,
+        )
+
+    progress_status(progress, "Writing request builder reports")
+    write_request_builder_reports(results, skipped, args)
+
+
 def request_progress_label(
     *,
     mode: str,
@@ -322,6 +441,18 @@ def foghttp_resource_clients(clients: list[ClientSpec]) -> tuple[list[ClientSpec
 def resource_scenario_names(value: str) -> list[str]:
     if value == DEFAULT_SCENARIOS:
         return parse_csv(DEFAULT_RESOURCE_SCENARIOS)
+    return parse_csv(value)
+
+
+def one_upstream_scenario_names(value: str) -> list[str]:
+    if value == DEFAULT_SCENARIOS:
+        return parse_csv(DEFAULT_ONE_UPSTREAM_SCENARIOS)
+    return parse_csv(value)
+
+
+def request_builder_scenario_names(value: str) -> list[str]:
+    if value == DEFAULT_SCENARIOS:
+        return parse_csv(DEFAULT_REQUEST_BUILDER_SCENARIOS)
     return parse_csv(value)
 
 

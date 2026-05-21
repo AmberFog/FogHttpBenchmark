@@ -1,6 +1,8 @@
 __all__ = (
     "JsonObject",
     "legacy_request_row",
+    "one_upstream_row",
+    "request_builder_row",
     "request_row",
     "resource_row",
     "write_report",
@@ -61,6 +63,46 @@ def request_row(client: str, *, ok_req_s: float, p95_ms: float) -> JsonObject:
         "scenario": "json-small",
         "threads_max": 2,
         "warmup_errors_total": 0,
+    }
+
+
+def one_upstream_row(client: str, *, ok_req_s: float, p95_ms: float) -> JsonObject:
+    return {
+        "case": "defaults-get",
+        "client": client,
+        "concurrency": 10,
+        "error_rate_percent": 0.0,
+        "errors_total": 0,
+        "fds_max": 5,
+        "group": "get",
+        "mode": "async",
+        "ok_req_s_median": ok_req_s,
+        "p95_ms_median": p95_ms,
+        "p99_ms_median": 3.0,
+        "profile": "defaults",
+        "request_limit": 10,
+        "rss_mb_max": 20.0,
+        "threads_max": 2,
+        "warmup_errors_total": 0,
+    }
+
+
+def request_builder_row(client: str, *, ops_s: float, p95_ms: float) -> JsonObject:
+    return {
+        "case": "default-params",
+        "client": client,
+        "errors_total": 0,
+        "fds_max": 5,
+        "group": "query",
+        "iterations": 1000,
+        "kind": "build",
+        "mode": "async",
+        "ops_s_median": ops_s,
+        "p95_ms_median": p95_ms,
+        "p99_ms_median": 0.01,
+        "profile": "defaults",
+        "rss_mb_max": 20.0,
+        "threads_max": 2,
     }
 
 

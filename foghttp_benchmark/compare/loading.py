@@ -58,6 +58,8 @@ def report_suite(metadata: JsonObject, aggregate_rows: list[JsonObject]) -> Benc
         "requests": "requests",
         "client-creation": "client-creation",
         "resource-backpressure": "resource-backpressure",
+        "one-upstream": "one-upstream",
+        "request-builder": "request-builder",
     }
     if isinstance(suite, str) and suite in known_suites:
         return known_suites[suite]
@@ -66,10 +68,14 @@ def report_suite(metadata: JsonObject, aggregate_rows: list[JsonObject]) -> Benc
 
 def infer_suite_from_rows(aggregate_rows: list[JsonObject]) -> BenchmarkSuite:
     first = aggregate_rows[0] if aggregate_rows else {}
+    if "kind" in first and "profile" in first and "ops_s_median" in first:
+        return "request-builder"
     if "ops_s_median" in first:
         return "client-creation"
     if "max_pending_requests" in first:
         return "resource-backpressure"
+    if "profile" in first and "case" in first:
+        return "one-upstream"
     if "ok_req_s_median" in first:
         return "requests"
     return "unknown"
@@ -87,6 +93,10 @@ def benchmark_row(suite: BenchmarkSuite, row: JsonObject) -> BenchmarkRow:
         return client_creation_row(row)
     if suite == "resource-backpressure":
         return resource_row(row)
+    if suite == "one-upstream":
+        return one_upstream_row(row)
+    if suite == "request-builder":
+        return request_builder_row(row)
     return request_row(row)
 
 
@@ -168,6 +178,62 @@ def resource_row(row: JsonObject) -> BenchmarkRow:
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=int_field(row, "warmup_errors_total"),
         error_rate_percent=optional_float_field(row, "error_rate_percent"),
+        rss_mb=optional_float_field(row, "rss_mb_max"),
+        threads=optional_int_field(row, "threads_max"),
+        fds=optional_int_field(row, "fds_max"),
+    )
+
+
+def one_upstream_row(row: JsonObject) -> BenchmarkRow:
+    mode = str_field(row, "mode")
+    client = str_field(row, "client")
+    case = str_field(row, "case")
+    group = str_field(row, "group")
+    profile = str_field(row, "profile")
+    concurrency = int_field(row, "concurrency")
+    request_limit = int_field(row, "request_limit")
+    return BenchmarkRow(
+        suite="one-upstream",
+        identity=(mode, client, group, case, str(concurrency), str(request_limit)),
+        group=(mode, group, case, str(concurrency), str(request_limit)),
+        label=f"{mode} / {client} / {group} / {case} / {profile} / conc={concurrency}",
+        mode=mode,
+        client=client,
+        scenario=case,
+        primary_value=float_field(row, "ok_req_s_median"),
+        p95_ms=optional_float_field(row, "p95_ms_median"),
+        p99_ms=optional_float_field(row, "p99_ms_median"),
+        errors_total=int_field(row, "errors_total"),
+        warmup_errors_total=int_field(row, "warmup_errors_total"),
+        error_rate_percent=optional_float_field(row, "error_rate_percent"),
+        rss_mb=optional_float_field(row, "rss_mb_max"),
+        threads=optional_int_field(row, "threads_max"),
+        fds=optional_int_field(row, "fds_max"),
+    )
+
+
+def request_builder_row(row: JsonObject) -> BenchmarkRow:
+    mode = str_field(row, "mode")
+    client = str_field(row, "client")
+    case = str_field(row, "case")
+    group = str_field(row, "group")
+    kind = str_field(row, "kind")
+    profile = str_field(row, "profile")
+    iterations = int_field(row, "iterations")
+    return BenchmarkRow(
+        suite="request-builder",
+        identity=(mode, client, kind, group, case, str(iterations)),
+        group=(mode, kind, group, case, str(iterations)),
+        label=f"{mode} / {client} / {kind} / {group} / {case} / {profile}",
+        mode=mode,
+        client=client,
+        scenario=case,
+        primary_value=float_field(row, "ops_s_median"),
+        p95_ms=optional_float_field(row, "p95_ms_median"),
+        p99_ms=optional_float_field(row, "p99_ms_median"),
+        errors_total=int_field(row, "errors_total"),
+        warmup_errors_total=0,
+        error_rate_percent=None,
         rss_mb=optional_float_field(row, "rss_mb_max"),
         threads=optional_int_field(row, "threads_max"),
         fds=optional_int_field(row, "fds_max"),
