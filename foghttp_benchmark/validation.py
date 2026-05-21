@@ -9,6 +9,7 @@ __all__ = (
 
 from foghttp_benchmark.constants import (
     CLIENT_CREATION_SUITE,
+    COMPRESSED_RESPONSE_SUITE,
     ONE_UPSTREAM_SUITE,
     REQUEST_BUILDER_SUITE,
     REQUESTS_SUITE,
@@ -27,6 +28,7 @@ def validate_suite(suite: str) -> None:
         RESOURCE_BACKPRESSURE_SUITE,
         ONE_UPSTREAM_SUITE,
         REQUEST_BUILDER_SUITE,
+        COMPRESSED_RESPONSE_SUITE,
     }:
         msg = f"unknown benchmark suite: {suite}"
         raise ValueError(msg)

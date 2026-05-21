@@ -2,8 +2,10 @@ __all__ = (
     "ASYNC_MODE",
     "BENCHMARK_SEED",
     "CLIENT_CREATION_SUITE",
+    "COMPRESSED_RESPONSE_SUITE",
     "DEFAULT_CLIENTS",
     "DEFAULT_CLIENT_COUNTS",
+    "DEFAULT_COMPRESSED_RESPONSE_SCENARIOS",
     "DEFAULT_CONCURRENCY",
     "DEFAULT_CREATION_ITERATIONS",
     "DEFAULT_MAX_REDIRECTS",
@@ -58,7 +60,15 @@ DEFAULT_SCENARIOS = (
     "pool-contention-20ms"
 )
 DEFAULT_RESOURCE_SCENARIOS = (
-    "active-limit-serial,pool-timeout-recovery,pending-queue-full,per-origin-isolation,response-body-limit"
+    "active-limit-serial,"
+    "pool-timeout-recovery,"
+    "pending-queue-full,"
+    "per-origin-isolation,"
+    "response-body-limit,"
+    "aggregate-buffered-budget"
+)
+DEFAULT_COMPRESSED_RESPONSE_SCENARIOS = (
+    "gzip-json-small,gzip-64k,deflate-64k,br-64k,gzip-high-ratio-1m,multi-gzip-deflate-64k"
 )
 DEFAULT_ONE_UPSTREAM_SCENARIOS = (
     "direct-get,"
@@ -88,6 +98,7 @@ CLIENT_CREATION_SUITE = "client-creation"
 RESOURCE_BACKPRESSURE_SUITE = "resource-backpressure"
 ONE_UPSTREAM_SUITE = "one-upstream"
 REQUEST_BUILDER_SUITE = "request-builder"
+COMPRESSED_RESPONSE_SUITE = "compressed-response"
 
 BENCHMARK_SEED = 20260507
 MIN_VARIATION_SAMPLES = 2

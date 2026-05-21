@@ -11,6 +11,7 @@ class ResourceCase:
     max_pending_requests: int | None
     per_origin_request_limit: int | None = None
     max_response_body_size: int | None = None
+    max_buffered_response_bytes: int | None = None
     pool_timeout_s: float = 5.0
     total_timeout_s: float = 30.0
     expected_content_length: int | None = None
@@ -72,5 +73,21 @@ def resource_cases() -> dict[str, ResourceCase]:
             expected_content_length=131072,
             recovery_path="/bytes/1024",
             description="Buffered response body exceeds max_response_body_size and must release slots.",
+        ),
+        "aggregate-buffered-budget": ResourceCase(
+            name="aggregate-buffered-budget",
+            path="/drip-bytes/65536/4096/2",
+            request_limit=10,
+            max_pending_requests=None,
+            per_origin_request_limit=10,
+            max_response_body_size=131072,
+            max_buffered_response_bytes=98304,
+            pool_timeout_s=5.0,
+            total_timeout_s=5.0,
+            expected_content_length=65536,
+            recovery_path="/bytes/1024",
+            description=(
+                "Concurrent buffered responses fit per-response limit but exceed aggregate buffered byte budget."
+            ),
         ),
     }

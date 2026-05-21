@@ -60,6 +60,7 @@ def report_suite(metadata: JsonObject, aggregate_rows: list[JsonObject]) -> Benc
         "resource-backpressure": "resource-backpressure",
         "one-upstream": "one-upstream",
         "request-builder": "request-builder",
+        "compressed-response": "compressed-response",
     }
     if isinstance(suite, str) and suite in known_suites:
         return known_suites[suite]
@@ -97,17 +98,17 @@ def benchmark_row(suite: BenchmarkSuite, row: JsonObject) -> BenchmarkRow:
         return one_upstream_row(row)
     if suite == "request-builder":
         return request_builder_row(row)
-    return request_row(row)
+    return request_row(row, suite=suite)
 
 
-def request_row(row: JsonObject) -> BenchmarkRow:
+def request_row(row: JsonObject, *, suite: BenchmarkSuite = "requests") -> BenchmarkRow:
     mode = str_field(row, "mode")
     client = str_field(row, "client")
     scenario = str_field(row, "scenario")
     concurrency = int_field(row, "concurrency")
     request_limit = int_field(row, "request_limit", int_field(row, "max_connections"))
     return BenchmarkRow(
-        suite="requests",
+        suite=suite,
         identity=(mode, client, scenario, str(concurrency), str(request_limit)),
         group=(mode, scenario, str(concurrency), str(request_limit)),
         label=f"{mode} / {client} / {scenario} / conc={concurrency} / limit={request_limit}",

@@ -12,7 +12,9 @@ resource/backpressure suite for active request limits, per-origin limits,
 pending queues, pool timeouts, and buffered response body limits, plus a
 one-upstream API client suite for `base_url`, client defaults, params merging,
 prepared requests, and request body encoding. It also includes a request
-builder suite for Python-side `build_request()` and query construction cost.
+builder suite for Python-side `build_request()` and query construction cost,
+and a compressed-response suite for transparent `gzip`, `deflate`, and `br`
+decode overhead.
 
 ## What It Measures
 
@@ -24,6 +26,8 @@ builder suite for Python-side `build_request()` and query construction cost.
 - client creation, first request, reuse, and close cost
 - one-upstream API client overhead for defaults and prepared requests
 - pure request builder overhead before network I/O
+- transparent compressed response decode overhead
+- aggregate buffered response budget behavior
 
 ## Install
 
@@ -85,7 +89,28 @@ uv run foghttp-benchmark \
 This suite is FogHTTP-specific because it uses FogHTTP public transport
 diagnostics. It checks global active request slots, per-origin active request
 slots, bounded pending requests, `PoolTimeout` behavior, recovery after timeout
-bursts, and `max_response_body_size` cleanup.
+bursts, `max_response_body_size` cleanup, and
+`max_buffered_response_bytes` aggregate budget behavior.
+
+## Compressed Response Benchmark
+
+```bash
+uv run foghttp-benchmark \
+  --suite compressed-response \
+  --clients foghttp,httpx,aiohttp,zapros \
+  --modes async,sync \
+  --requests 1000 \
+  --warmup 100 \
+  --repeats 3 \
+  --concurrency 1,10,50 \
+  --output-dir results/compressed-response
+```
+
+This suite measures transparent decode overhead for buffered compressed
+responses: small JSON, 64 KiB bodies, a high-ratio 1 MiB body, and a multi-field
+`Content-Encoding` response. It is useful for checking the cost of FogHTTP
+`0.3.1` response decoding against clients that already perform automatic
+decompression.
 
 ## One-Upstream API Client Benchmark
 

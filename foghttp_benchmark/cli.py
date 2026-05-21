@@ -8,9 +8,11 @@ import typer
 
 from foghttp_benchmark.clients import available_clients
 from foghttp_benchmark.compare.reports import build_comparison, write_or_print_compare_report
+from foghttp_benchmark.compressed_response.suite import run_compressed_response_suite
 from foghttp_benchmark.constants import (
     BENCHMARK_SEED,
     CLIENT_CREATION_SUITE,
+    COMPRESSED_RESPONSE_SUITE,
     DEFAULT_CLIENT_COUNTS,
     DEFAULT_CLIENTS,
     DEFAULT_CONCURRENCY,
@@ -80,7 +82,8 @@ def main(
         str,
         typer.Option(
             help=(
-                "Benchmark suite: requests, client-creation, resource-backpressure, one-upstream, or request-builder."
+                "Benchmark suite: requests, client-creation, resource-backpressure, one-upstream, "
+                "request-builder, or compressed-response."
             ),
         ),
     ] = REQUESTS_SUITE,
@@ -188,6 +191,9 @@ async def run_benchmark(args: BenchmarkArgs, *, show_progress: bool = True) -> N
             return
         if args.suite == RESOURCE_BACKPRESSURE_SUITE:
             await run_resource_backpressure_suite(args, clients, skipped, progress=progress)
+            return
+        if args.suite == COMPRESSED_RESPONSE_SUITE:
+            await run_compressed_response_suite(args, clients, skipped, progress=progress)
             return
         await run_request_suite(args, clients, skipped, progress=progress)
 

@@ -19,9 +19,18 @@ from foghttp_benchmark.models import ClientStatKey, ClientStats, JsonObject, Res
 CLIENT_STAT_KEYS: tuple[ClientStatKey, ...] = (
     "active_requests",
     "pending_requests",
+    "peak_pending_requests",
     "total_requests",
     "failed_requests",
+    "pool_acquire_attempts",
+    "pool_acquire_immediate",
+    "pool_acquire_waited",
     "pool_acquire_timeouts",
+    "pool_acquire_wait_time_total_ns",
+    "pool_acquire_wait_time_max_ns",
+    "pool_acquire_wait_time_last_ns",
+    "buffered_response_bytes",
+    "buffered_response_budget_rejections",
 )
 
 

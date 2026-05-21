@@ -24,6 +24,7 @@ BenchmarkSuite: TypeAlias = Literal[
     "resource-backpressure",
     "one-upstream",
     "request-builder",
+    "compressed-response",
     "unknown",
 ]
 

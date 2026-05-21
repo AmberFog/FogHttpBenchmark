@@ -115,5 +115,6 @@ def foghttp_limits(foghttp: Any, config: ClientConfig) -> Any:
         max_active_requests_per_origin=config.per_origin_request_limit,
         max_pending_requests=max_pending_requests,
         max_response_body_size=config.max_response_body_size,
+        max_buffered_response_bytes=config.max_buffered_response_bytes,
         max_idle_connections_per_host=idle_connection_limit,
     )

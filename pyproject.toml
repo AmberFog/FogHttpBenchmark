@@ -16,6 +16,7 @@ authors = [
 ]
 dependencies = [
     "aiohttp>=3.12,<4",
+    "brotli>=1.1,<2",
     "faker>=33",
     "foghttp>=0.3,<0.4",
     "httpx>=0.28,<1",

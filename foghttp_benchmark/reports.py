@@ -101,6 +101,7 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
             "python": sys.version,
             "platform": platform.platform(),
             "server": "local asyncio HTTP/1.1 loopback server",
+            "suite": args.suite,
             "args": vars(args),
             "package_versions": package_versions(
                 ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
