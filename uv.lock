@@ -280,33 +280,33 @@ wheels = [
 
 [[package]]
 name = "foghttp"
-version = "0.3.1"
+version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "orjson" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/09/d6/6c993a8c6d10f4cab4febc9b80e348929716ad44751cff3784ddde7fb309/foghttp-0.3.1.tar.gz", hash = "sha256:c65495e0a436b82686583c70a733ef3310cce3df4eaf30d6deed5696fdad46a2", size = 1291337, upload-time = "2026-05-21T18:28:16.836Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/19/c4/3f11722038d0da6fcc18e97a326ca7ebff4efa8096ad70ccc3c68e5f0bbe/foghttp-0.3.2.tar.gz", hash = "sha256:824e0d192742c5eb006467d48b0489af357b91b78c29b4b31a6e6f7489e742e4", size = 1344289, upload-time = "2026-05-27T13:57:50.28Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/52/e159d208a2d3075c0728177507319a0de760e898ff302ccc8a9d1be5da2f/foghttp-0.3.1-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:57689f7080a38b8d06b7fbd779ce8a9ecf27149795b189f227d579d44e9fb5ec", size = 1920971, upload-time = "2026-05-21T18:27:39.333Z" },
-    { url = "https://files.pythonhosted.org/packages/9e/00/fe870ab883bdd4cf8984db85b2afedbfff277d085f52fecd8f51831c8294/foghttp-0.3.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:051b2c02e2969336227e66d137312b1843900669903b728eb3cda15d0b85c7d6", size = 1865078, upload-time = "2026-05-21T18:27:41.194Z" },
-    { url = "https://files.pythonhosted.org/packages/be/b4/5e4e6029f6edd55c47032f80eb2f8a24830759333788e4bb1a451e2a6384/foghttp-0.3.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:07c7449576266ab9416cff8e6cbefe657386eb10d2e8ee1847f07ae26ee69ca7", size = 2074107, upload-time = "2026-05-21T18:27:43.123Z" },
-    { url = "https://files.pythonhosted.org/packages/c1/50/094dff717f4af4621dbcd0f715f76ce76e07ef4644f040de9f0014996dca/foghttp-0.3.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8c689b667db2066e818445d92b37ed311168475ad8eb35794a1e68ec95191428", size = 2070189, upload-time = "2026-05-21T18:27:45.231Z" },
-    { url = "https://files.pythonhosted.org/packages/e7/a1/22dda4efe82f2023068ea6bc2707e4917be1ac166fcb14d52a1097d2e3c0/foghttp-0.3.1-cp311-cp311-win_amd64.whl", hash = "sha256:6e31659c23d4306377e683295ede0ab6e72283a55c65e1cc4654d8dca3fd86ec", size = 1697572, upload-time = "2026-05-21T18:27:47.101Z" },
-    { url = "https://files.pythonhosted.org/packages/a2/30/ced6821602b1591c0792b5d039d7a0af4ef998a0c6776db6338ae4d5f2cb/foghttp-0.3.1-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:b1b1fe90a372d5eb2ad7b2afe7d91efb8cdea4482de098f06c77f8b9e8da9909", size = 1917906, upload-time = "2026-05-21T18:27:49.034Z" },
-    { url = "https://files.pythonhosted.org/packages/72/89/252b2ff23baaf8ad51bdd194f6472658517f9caaee47c2e18af07c75a356/foghttp-0.3.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:142baab9c300321c499500ea6fcf8ceb98e7fd22aa5831923c44d3f2a247ddf4", size = 1858787, upload-time = "2026-05-21T18:27:51.258Z" },
-    { url = "https://files.pythonhosted.org/packages/3d/23/58e3665b39fcc5f0bea5559bd2f17e1850db9bdd87a0761f27129cc5f50e/foghttp-0.3.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e33029f79f672c082c6a38b852c2060a35394a85979f79be4ae40396e347f2d7", size = 2067180, upload-time = "2026-05-21T18:27:52.884Z" },
-    { url = "https://files.pythonhosted.org/packages/7e/75/eca2b4ad1fe8c9a3d1cbbe6a350249250f22450887ae1b1eecdcbd31ce8c/foghttp-0.3.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3272344066de1c95fa6bf096ff195399afb32bb945c24bb7d0b07d22745bb062", size = 2062102, upload-time = "2026-05-21T18:27:54.66Z" },
-    { url = "https://files.pythonhosted.org/packages/d9/78/b3b4d72942f8aa764717bbc984126b9a6dbb297ea1f3dd2deec05b003bef/foghttp-0.3.1-cp312-cp312-win_amd64.whl", hash = "sha256:62fa3310716ce896679225585de53a897aabb14b32f55196afadfeb681e8d3e4", size = 1695787, upload-time = "2026-05-21T18:27:56.814Z" },
-    { url = "https://files.pythonhosted.org/packages/7f/06/37ce150d8b20728f03a85737ba7892fefcd77a45313821a40a9f285a4949/foghttp-0.3.1-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:3abac0155651fff068e6434c7803236c05f2b02787ff886c799fc9eae8f2af9f", size = 1917449, upload-time = "2026-05-21T18:27:58.497Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/1c/628b505de17e2444c8d6bb2ddcd2d11401e35ca92babdc423f5c7c5e614d/foghttp-0.3.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:d5a07387d1126d9bca71034c86cea3e38b1478f6fe02f579be16b6a53069bbf2", size = 1857865, upload-time = "2026-05-21T18:28:00.206Z" },
-    { url = "https://files.pythonhosted.org/packages/68/4a/b7ac03f96e3ad854294f33c1f19d937b3b5716774995b4ff6cb75302d5b6/foghttp-0.3.1-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9bdaf219d4f5f87a36d5bb797107dd1138f876d1be7cb34b6f37a8437f4cc810", size = 2067464, upload-time = "2026-05-21T18:28:01.681Z" },
-    { url = "https://files.pythonhosted.org/packages/7d/01/797ad23575696d13eda6755dbb645644747eb8abfffda69f6e05c102ab06/foghttp-0.3.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:535a1d07448e53c464a49442360f2528714f9d8a636dd4423d36edb63bab952a", size = 2060948, upload-time = "2026-05-21T18:28:03.745Z" },
-    { url = "https://files.pythonhosted.org/packages/a4/cb/987e981263cbe846821741cece5c7ab1133fc38b98d71b092af146c8e7f0/foghttp-0.3.1-cp313-cp313-win_amd64.whl", hash = "sha256:970f338ce67404e46b7080ed3515300b2b375a40e1d601d1ee57e022dd1bf1fd", size = 1695292, upload-time = "2026-05-21T18:28:05.687Z" },
-    { url = "https://files.pythonhosted.org/packages/31/0e/d2635f70c92c41d8554483462de3e3c023958292eae9cc842f009373c500/foghttp-0.3.1-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:59fead459b3a3b1b419ccf26604a95acda55781c0ce2c8a8864cc6b963f129d4", size = 1918857, upload-time = "2026-05-21T18:28:07.462Z" },
-    { url = "https://files.pythonhosted.org/packages/96/63/1fe038f7a1d2d557c79126292592c97d27cf509dcb402499834ad78f700b/foghttp-0.3.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:2a24c7074a52b1cd1e79b721c155b266d941e5a8cf84fe0cfe9ef08d36b80cdb", size = 1859038, upload-time = "2026-05-21T18:28:09.406Z" },
-    { url = "https://files.pythonhosted.org/packages/59/c5/5e88bee969a5551132c8645b4b0d922d3e921e25fe5ff2ebf4743df572c8/foghttp-0.3.1-cp314-cp314-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f1613c7dbca6cd1df87c98f106f59bc1b6354eb1beb636a48dc6cf669e79ef7e", size = 2067119, upload-time = "2026-05-21T18:28:11.518Z" },
-    { url = "https://files.pythonhosted.org/packages/7b/68/06694b670b6e9c77d47fd654ca3a39d14eeb8187ec29e6cbf096de6c4e9b/foghttp-0.3.1-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:05e06c554e433e3f1b37156e5d6c72c10d0d841318ef04fcd98af91bb1f32a69", size = 2061049, upload-time = "2026-05-21T18:28:13.426Z" },
-    { url = "https://files.pythonhosted.org/packages/93/c2/8b1933290fd890ac56692941459edc1f67ba9ecfb26c34d5fd8edebec26c/foghttp-0.3.1-cp314-cp314-win_amd64.whl", hash = "sha256:dc333d9b4ae58a6114ccd425a542a223847a12fdc6f49152eefae0bb018118d8", size = 1696415, upload-time = "2026-05-21T18:28:14.945Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/0a/20ad0183ca996739083fa196a2767283fe4871a64d595fb6673dc6b14058/foghttp-0.3.2-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:34af4f29dbe5ce26cb484a17ab1af96ca7f362bc49da8cdc499ce59873d13f45", size = 2038172, upload-time = "2026-05-27T13:57:17.592Z" },
+    { url = "https://files.pythonhosted.org/packages/db/c5/faa8c175a2e9e58cf57c1a1ada7a502cc9c2cd01693e22830ca71ae04c1f/foghttp-0.3.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:df6854e63bf1000c3c85a263937f7803567822416655ce793e7e98dbd7f23e22", size = 1987760, upload-time = "2026-05-27T13:57:19.179Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/c7/6c8f60d16fe9b4d0bb7fc5411c5d359097ea8c76914c11cadaa40f46ba0c/foghttp-0.3.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:665bd371da27aa0f21490ceac7b3150b01ac1cb20a7bbd4e3b7c41ea286b909a", size = 2208155, upload-time = "2026-05-27T13:57:20.71Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/13/0a5a316a250227a1f76abf049aeb601026c0bd6ba158cf8d31adb7db7f67/foghttp-0.3.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:439c64a94ae212648cc11497155319801756cadb9f59bc2fb47def7de4e74b27", size = 2183862, upload-time = "2026-05-27T13:57:22.443Z" },
+    { url = "https://files.pythonhosted.org/packages/18/bc/ccb183b34d765f32afa0ccf9560dd3b62f5742dfcacfa0dc5588388d37d3/foghttp-0.3.2-cp311-cp311-win_amd64.whl", hash = "sha256:91054bdadbd1d07462f3a1ecdfbb30dc00d65d9f8fe60cd4dd5bccf1d5f0d904", size = 1822426, upload-time = "2026-05-27T13:57:24.046Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/18/347d0e005a0421c4b3fd8acbdb31069612ab23add6addc4126db65821a24/foghttp-0.3.2-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:4a955c048c3f003d94618651c3167578c425e49574c3f53413e245ead8e03c0c", size = 2040190, upload-time = "2026-05-27T13:57:26.134Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/96/7d961aea1c5e2fb77a0d7ea2eadcb58c10765629ca302a60ebb79ad17893/foghttp-0.3.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:eb8634022c71e0ffd917e2464090a98ab52874f898499ced682e30d6418867f5", size = 1990402, upload-time = "2026-05-27T13:57:28.023Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/d4/46f8fae64081507910d805bd96c18f4c26f8542fd8e7bdb0285d2ae40f23/foghttp-0.3.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:97557074752b33a3bcef538e4eb32dee5d17b0fe8617fff40d5e30939b526045", size = 2209782, upload-time = "2026-05-27T13:57:29.536Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/d5/59a01b8f273c18e25d9dcca590e1bd53cf374b6b08636b4e78fe175f4500/foghttp-0.3.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9a95f3774c15aaff214d719a261b050bea4978f58688bf133fed589970e47444", size = 2190925, upload-time = "2026-05-27T13:57:31.035Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/64/86c919356d367c08e799a2a9f71f1a11d7ad5aca208f435eadde944386be/foghttp-0.3.2-cp312-cp312-win_amd64.whl", hash = "sha256:5fd44a5dd5f70acb22fbf69843658f9cdbee80515338d7a76715c3b9f0e71abb", size = 1822363, upload-time = "2026-05-27T13:57:32.817Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/9b/66cade4dd55ae682c19ec00375c5ab0cfb6e63441e88d783e5615381635a/foghttp-0.3.2-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:1070d70a26b97aa755f8a0fd53c76c7e6f104f49fd2b4cd5a227ed4a9c5d9d9e", size = 2039554, upload-time = "2026-05-27T13:57:34.465Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/41/ec50e0b75da1b07c168535ff3f621e18f93f33630dea1256a25bfe9a383b/foghttp-0.3.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:c3d6d1d79d5d360635c51b11c62170fc0a91001286f9aa9a95366d54bba35b13", size = 1989689, upload-time = "2026-05-27T13:57:36.208Z" },
+    { url = "https://files.pythonhosted.org/packages/84/c0/8706658c69754ffe5eec653d73f49ddb5269078fc98790f544e0e70dd95f/foghttp-0.3.2-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:87aa1f2728a81d04105f81bf88c91234e6594fab309e5b8bb21351b76d18c59b", size = 2210272, upload-time = "2026-05-27T13:57:37.718Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/da/2df800fb946c070aeb5b2191a604286d538952adc281b52e2bc790a048a6/foghttp-0.3.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:81ce5eb5dae7ce1e8c93d2150fb97760e646582131bf816012884d2f54579042", size = 2189577, upload-time = "2026-05-27T13:57:39.305Z" },
+    { url = "https://files.pythonhosted.org/packages/22/9b/bc74ad37dd43c2fc2b24606d2ca45cbeda427f28e37f184d50f18b8d1acc/foghttp-0.3.2-cp313-cp313-win_amd64.whl", hash = "sha256:7c87bf77c881a4ea0376e1ba35940a4f9d52bb840f73f1aa99a3c52cece9c26d", size = 1821867, upload-time = "2026-05-27T13:57:40.907Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/af/ace52fc9f132cb9a75c9a80f35f8deb1c13fbf84bad7653416ea11916d09/foghttp-0.3.2-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:d9cc7eb3cfa6fbdc4d1fe0f41a74048beb10cad5c711acbcbf1fd1d6d6fd9e37", size = 2040712, upload-time = "2026-05-27T13:57:42.796Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/d9/de18e71e5399991f6568e35e83f42d554b44e43f02111fff28d485be2620/foghttp-0.3.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:4b78f2c795efaa3b76f352c5e843307f7effa106d231145590adc3315f3a69a8", size = 1989391, upload-time = "2026-05-27T13:57:44.273Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/b8/3eee8a078ec670d229155f0376a052ce3f52610a0bf111637868e628e489/foghttp-0.3.2-cp314-cp314-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2275aa9e941b300fbb781a1ba2e244204c986358ca48de70436f1876de34d016", size = 2212063, upload-time = "2026-05-27T13:57:45.76Z" },
+    { url = "https://files.pythonhosted.org/packages/16/9e/8b6282efe041cb178df7e8f47519e8b77c7748c147ed4501b7319463c98c/foghttp-0.3.2-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:76b8e10f7a73b3f9e92bc3dbc4f8cb55e1b42aab238afe6e0e4223ccf00b6d57", size = 2187308, upload-time = "2026-05-27T13:57:47.19Z" },
+    { url = "https://files.pythonhosted.org/packages/79/97/43b484b1737a46dd027d7ae24fc248a2cb8ef005b7a9f403f22db3b78a18/foghttp-0.3.2-cp314-cp314-win_amd64.whl", hash = "sha256:dd59fc579af7eb0310c8afaf0ff4a45d57820cf62b1d7936481386c295feebdf", size = 1820337, upload-time = "2026-05-27T13:57:48.707Z" },
 ]
 
 [[package]]
@@ -319,6 +319,7 @@ dependencies = [
     { name = "faker" },
     { name = "foghttp" },
     { name = "httpx" },
+    { name = "httpxyz" },
     { name = "jinja2" },
     { name = "psutil" },
     { name = "rich" },
@@ -339,8 +340,9 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.12,<4" },
     { name = "brotli", specifier = ">=1.1,<2" },
     { name = "faker", specifier = ">=33" },
-    { name = "foghttp", specifier = ">=0.3,<0.4" },
+    { name = "foghttp", specifier = ">=0.3.2,<0.4" },
     { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "httpxyz", specifier = ">=0.31,<1" },
     { name = "jinja2", specifier = ">=3.1,<4" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20,<2" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4,<5" },
@@ -481,6 +483,19 @@ wheels = [
 ]
 
 [[package]]
+name = "httpcorexyz"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "h11" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/51/60ffabfde3a23b4dd37d97b7f78271e466ce9a1e719bf39d6b94ac59c10c/httpcorexyz-1.1.1.tar.gz", hash = "sha256:0b8dbbe8ffaccd20b7c755d92129f9fb04a23f2ef22b32ff82e2d1c7fcfee803", size = 96629, upload-time = "2026-05-08T08:36:25.192Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/f0/8597741d1455fc810c753d177120815925666a8c15f86e9cb8b6e5969479/httpcorexyz-1.1.1-py3-none-any.whl", hash = "sha256:58becd21f127c0a846813d0705f9e0c27c16c867bb436813667f569d4f0ba94e", size = 83392, upload-time = "2026-05-08T08:36:23.058Z" },
+]
+
+[[package]]
 name = "httpx"
 version = "0.28.1"
 source = { registry = "https://pypi.org/simple" }
@@ -493,6 +508,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
+]
+
+[[package]]
+name = "httpxyz"
+version = "0.31.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "certifi" },
+    { name = "httpcorexyz" },
+    { name = "idna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/21/6a/700053e47397c1d7bfa05255e3414ece964b21da2c1f7b622306eabe4dac/httpxyz-0.31.2.tar.gz", hash = "sha256:da96c2f35c724023b9395b1df718f7d52d049b8424a0c919ca0fe2b64dce73a0", size = 149638, upload-time = "2026-05-08T13:21:13.686Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/d7/45f259608b8ce844a8a05c5a9f2e363e94d598d7a782d3ad2a7682c11605/httpxyz-0.31.2-py3-none-any.whl", hash = "sha256:1e8058b7324aaf875efb6b4cf5a5a423f4ac101fd4af515349fb4e1d3e4d4441", size = 76949, upload-time = "2026-05-08T13:21:12.471Z" },
 ]
 
 [[package]]

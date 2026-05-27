@@ -7,6 +7,7 @@ __all__ = (
 import importlib
 from typing import Protocol
 
+from foghttp_benchmark.clients.httpxyz_import import import_httpxyz
 from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.request_builder.cases import (
     BYTES_BODY,
@@ -93,10 +94,12 @@ def available_request_builder_clients(
         ASYNC_MODE: {
             "foghttp": make_foghttp_async,
             "httpx": make_httpx_async,
+            "httpxyz": make_httpxyz_async,
         },
         SYNC_MODE: {
             "foghttp": make_foghttp_sync,
             "httpx": make_httpx_sync,
+            "httpxyz": make_httpxyz_sync,
         },
     }
     clients: list[RequestBuilderClientSpec] = []
@@ -112,7 +115,7 @@ def available_request_builder_clients(
                 skipped[f"{mode}:{name}"] = "request-builder suite requires build_request support"
                 continue
             try:
-                importlib.import_module(client_module_name(name))
+                import_client_module(name)
             except Exception as exc:  # noqa: BLE001
                 skipped[f"{mode}:{name}"] = f"{type(exc).__name__}: {exc}"
                 continue
@@ -177,6 +180,38 @@ def make_httpx_sync(config: RequestBuilderClientConfig) -> SyncRequestBuilderAda
             max_keepalive_connections=config.request_limit,
         ),
         timeout=httpx.Timeout(5.0, pool=config.pool_timeout_s),
+        trust_env=False,
+    )
+    return _SyncBuilderAdapter(client)
+
+
+def make_httpxyz_async(config: RequestBuilderClientConfig) -> AsyncRequestBuilderAdapter:
+    httpxyz = import_httpxyz()
+    client = httpxyz.AsyncClient(
+        base_url=config.base_url or "",
+        headers=config.headers,
+        params=config.params,
+        limits=httpxyz.Limits(
+            max_connections=config.request_limit,
+            max_keepalive_connections=config.request_limit,
+        ),
+        timeout=httpxyz.Timeout(5.0, pool=config.pool_timeout_s),
+        trust_env=False,
+    )
+    return _AsyncBuilderAdapter(client)
+
+
+def make_httpxyz_sync(config: RequestBuilderClientConfig) -> SyncRequestBuilderAdapter:
+    httpxyz = import_httpxyz()
+    client = httpxyz.Client(
+        base_url=config.base_url or "",
+        headers=config.headers,
+        params=config.params,
+        limits=httpxyz.Limits(
+            max_connections=config.request_limit,
+            max_keepalive_connections=config.request_limit,
+        ),
+        timeout=httpxyz.Timeout(5.0, pool=config.pool_timeout_s),
         trust_env=False,
     )
     return _SyncBuilderAdapter(client)
@@ -276,6 +311,12 @@ def body_matches_case(case: RequestBuilderCase, content: object) -> bool:
     if case.body_kind == "bytes":
         return isinstance(content, bytes) and len(content) == len(BYTES_BODY)
     return True
+
+
+def import_client_module(name: str) -> object:
+    if name == "httpxyz":
+        return import_httpxyz()
+    return importlib.import_module(client_module_name(name))
 
 
 def client_module_name(name: str) -> str:

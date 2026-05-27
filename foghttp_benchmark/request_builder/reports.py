@@ -129,7 +129,7 @@ def write_request_builder_reports(
             "suite": REQUEST_BUILDER_SUITE,
             "args": vars(args),
             "package_versions": package_versions(
-                ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
+                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
             "skipped": skipped,
         },

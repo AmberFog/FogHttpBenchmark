@@ -122,7 +122,7 @@ def write_creation_reports(
             "suite": args.suite,
             "args": vars(args),
             "package_versions": package_versions(
-                ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
+                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
             "skipped": skipped,
         },

@@ -104,7 +104,7 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
             "suite": args.suite,
             "args": vars(args),
             "package_versions": package_versions(
-                ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
+                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
             "skipped": skipped,
         },

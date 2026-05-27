@@ -1,6 +1,7 @@
 __all__ = ("app", "compare", "main", "run_benchmark")
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -25,11 +26,14 @@ from foghttp_benchmark.constants import (
     DEFAULT_REQUESTS,
     DEFAULT_RESOURCE_SCENARIOS,
     DEFAULT_SCENARIOS,
+    DEFAULT_STREAMING_REQUESTS,
+    DEFAULT_STREAMING_SCENARIOS,
     DEFAULT_WARMUP,
     ONE_UPSTREAM_SUITE,
     REQUEST_BUILDER_SUITE,
     REQUESTS_SUITE,
     RESOURCE_BACKPRESSURE_SUITE,
+    RESPONSE_STREAMING_SUITE,
     RESULTS_DIR,
 )
 from foghttp_benchmark.creation import run_client_creation_benchmarks
@@ -54,12 +58,19 @@ from foghttp_benchmark.resource.reporting.reports import write_resource_reports
 from foghttp_benchmark.runner import build_plan, run_once
 from foghttp_benchmark.scenarios import scenarios
 from foghttp_benchmark.server import benchmark_server
+from foghttp_benchmark.streaming import (
+    available_streaming_clients,
+    run_response_streaming_benchmarks,
+    streaming_cases,
+    write_streaming_reports,
+)
 from foghttp_benchmark.validation import (
     validate_client_creation_args,
     validate_one_upstream_args,
     validate_request_benchmark_args,
     validate_request_builder_args,
     validate_resource_backpressure_args,
+    validate_streaming_args,
     validate_suite,
 )
 
@@ -83,7 +94,7 @@ def main(
         typer.Option(
             help=(
                 "Benchmark suite: requests, client-creation, resource-backpressure, one-upstream, "
-                "request-builder, or compressed-response."
+                "request-builder, compressed-response, or response-streaming."
             ),
         ),
     ] = REQUESTS_SUITE,
@@ -179,6 +190,9 @@ async def run_benchmark(args: BenchmarkArgs, *, show_progress: bool = True) -> N
             return
         if args.suite == REQUEST_BUILDER_SUITE:
             await run_request_builder_suite(args, progress=progress)
+            return
+        if args.suite == RESPONSE_STREAMING_SUITE:
+            await run_response_streaming_suite(args, progress=progress)
             return
 
         clients, skipped = available_clients(requested_clients, requested_modes)
@@ -342,7 +356,7 @@ async def run_one_upstream_suite(
     requested_modes = parse_csv(args.modes)
     clients, skipped = available_one_upstream_clients(requested_clients, requested_modes)
     if not clients:
-        msg = "one-upstream suite requires foghttp or httpx clients"
+        msg = "one-upstream suite requires foghttp, httpx, or httpxyz clients"
         raise ValueError(msg)
     case_map = one_upstream_cases()
     requested_cases = one_upstream_scenario_names(args.scenarios)
@@ -383,7 +397,7 @@ async def run_request_builder_suite(
     requested_modes = parse_csv(args.modes)
     clients, skipped = available_request_builder_clients(requested_clients, requested_modes)
     if not clients:
-        msg = "request-builder suite requires foghttp or httpx clients"
+        msg = "request-builder suite requires foghttp, httpx, or httpxyz clients"
         raise ValueError(msg)
     case_map = request_builder_cases()
     requested_cases = request_builder_scenario_names(args.scenarios)
@@ -419,6 +433,50 @@ async def run_request_builder_suite(
 
     progress_status(progress, "Writing request builder reports")
     write_request_builder_reports(results, skipped, args)
+
+
+async def run_response_streaming_suite(
+    args: BenchmarkArgs,
+    *,
+    progress: ProgressReporter | None = None,
+) -> None:
+    progress_status(progress, "Building response streaming benchmark plan")
+    requested_clients = parse_csv(args.clients)
+    requested_modes = parse_csv(args.modes)
+    clients, skipped = available_streaming_clients(requested_clients, requested_modes)
+    if not clients:
+        msg = "response-streaming suite requires clients with comparable streaming support"
+        raise ValueError(msg)
+    case_map = streaming_cases()
+    requested_cases = streaming_scenario_names(args.scenarios)
+    concurrency_levels = parse_int_csv(args.concurrency)
+    requests = streaming_requests(args.requests)
+    report_args = response_streaming_report_args(args, requested_cases=requested_cases, requests=requests)
+    validate_streaming_args(
+        report_args,
+        requested_cases=requested_cases,
+        case_map=case_map,
+        concurrency_levels=concurrency_levels,
+        requests=requests,
+    )
+    cases = [case_map[name] for name in requested_cases]
+    progress_status(progress, "Starting local benchmark server")
+    async with benchmark_server() as base_url:
+        results = await run_response_streaming_benchmarks(
+            clients=clients,
+            base_url=base_url,
+            cases=cases,
+            concurrency_levels=concurrency_levels,
+            requests=requests,
+            warmup=args.warmup,
+            repeats=args.repeats,
+            shuffle=not args.no_shuffle,
+            seed=args.seed,
+            progress=progress,
+        )
+
+    progress_status(progress, "Writing response streaming reports")
+    write_streaming_reports(results, skipped, report_args)
 
 
 def request_progress_label(
@@ -460,6 +518,27 @@ def request_builder_scenario_names(value: str) -> list[str]:
     if value == DEFAULT_SCENARIOS:
         return parse_csv(DEFAULT_REQUEST_BUILDER_SCENARIOS)
     return parse_csv(value)
+
+
+def streaming_scenario_names(value: str) -> list[str]:
+    if value == DEFAULT_SCENARIOS:
+        return parse_csv(DEFAULT_STREAMING_SCENARIOS)
+    return parse_csv(value)
+
+
+def streaming_requests(value: int) -> int:
+    if value == DEFAULT_REQUESTS:
+        return DEFAULT_STREAMING_REQUESTS
+    return value
+
+
+def response_streaming_report_args(
+    args: BenchmarkArgs,
+    *,
+    requested_cases: list[str],
+    requests: int,
+) -> BenchmarkArgs:
+    return replace(args, requests=requests, scenarios=",".join(requested_cases))
 
 
 def parse_csv(value: str) -> list[str]:

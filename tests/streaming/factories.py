@@ -1,0 +1,47 @@
+from foghttp_benchmark.models import ClientStats
+from foghttp_benchmark.streaming.models import StreamingResult
+
+
+def streaming_result(
+    *,
+    streams_per_second: float = 100.0,
+    ok_streams_per_second: float = 100.0,
+    mb_per_second: float = 10.0,
+    p95_ms: float = 1.0,
+    first_chunk_p95_ms: float | None = 0.5,
+    client_stats: ClientStats | None = None,
+) -> StreamingResult:
+    return StreamingResult(
+        client="foghttp",
+        mode="async",
+        case="stream-64k",
+        read="bytes",
+        consume="all",
+        concurrency=10,
+        request_limit=10,
+        requests=20,
+        repeat=1,
+        duration_s=0.2,
+        streams_per_second=streams_per_second,
+        ok_streams_per_second=ok_streams_per_second,
+        ok_streams=20,
+        bytes_read_total=1_310_720,
+        mb_per_second=mb_per_second,
+        chunks_read_total=160,
+        text_chars_read_total=0,
+        lines_read_total=0,
+        lines_per_second=0.0,
+        p50_ms=0.5,
+        p95_ms=p95_ms,
+        p99_ms=2.0,
+        first_chunk_p50_ms=0.2,
+        first_chunk_p95_ms=first_chunk_p95_ms,
+        errors=0,
+        warmup_errors=0,
+        error_types={},
+        warmup_error_types={},
+        peak_rss_mb=100.0,
+        peak_threads=4,
+        peak_fds=12,
+        client_stats=client_stats,
+    )

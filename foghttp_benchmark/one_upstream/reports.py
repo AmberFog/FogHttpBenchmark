@@ -138,7 +138,7 @@ def write_one_upstream_reports(
             "suite": ONE_UPSTREAM_SUITE,
             "args": vars(args),
             "package_versions": package_versions(
-                ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
+                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
             "skipped": skipped,
         },

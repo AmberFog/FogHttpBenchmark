@@ -32,7 +32,7 @@ def write_resource_reports(
             "args": vars(args),
             "resource_cases": sorted({result.scenario for result in results}),
             "package_versions": package_versions(
-                ["foghttp", "httpx", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
+                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
             "skipped": skipped,
         },
