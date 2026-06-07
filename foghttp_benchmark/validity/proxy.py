@@ -43,7 +43,15 @@ def proxy_specific_reasons(suite: str, row: JsonObject) -> list[ValidityReason]:
             ),
         )
     if config in ("explicit", "trust-env") and ok_requests > 0:
-        reasons.extend(missing_proxy_counter_reasons(row, target_scheme, measured_http, measured_connect))
+        reasons.extend(
+            missing_proxy_counter_reasons(
+                row,
+                target_scheme,
+                measured_http,
+                measured_connect,
+                total_connect,
+            ),
+        )
     return reasons
 
 
@@ -52,6 +60,7 @@ def missing_proxy_counter_reasons(
     target_scheme: str,
     measured_http: int,
     measured_connect: int,
+    total_connect: int,
 ) -> list[ValidityReason]:
     if target_scheme == "http" and measured_http <= 0:
         return [
@@ -62,7 +71,7 @@ def missing_proxy_counter_reasons(
                 row=row_reference(row),
             ),
         ]
-    if target_scheme == "https" and measured_connect <= 0:
+    if target_scheme == "https" and connect_counter_value(row, measured_connect, total_connect) <= 0:
         return [
             validity_reason(
                 status="invalid",
@@ -72,6 +81,12 @@ def missing_proxy_counter_reasons(
             ),
         ]
     return []
+
+
+def connect_counter_value(row: JsonObject, measured_connect: int, total_connect: int) -> int:
+    if str_field(row, "lifecycle") == "cold-client":
+        return measured_connect
+    return total_connect
 
 
 def has_proxy_bypass_errors(row: JsonObject) -> bool:

@@ -225,9 +225,11 @@ The parent process runs each client/scenario pair sequentially in subprocesses,
 each child writes the normal suite-specific report, and the parent writes a
 merged JSON report with child exit codes, stdout/stderr tails, duration, peak
 RSS, threads, and file descriptors. Suites without scenario dimensions fall
-back to per-client subprocess isolation. If a child fails, the parent still
-writes diagnostics and exits with an error so invalid runs are not treated as
-successful measurements.
+back to per-client subprocess isolation. The scheduler waits briefly between
+child processes so loopback sockets, proxy state, TLS state, descriptors, and
+runtime resources can settle before the next measurement group starts. If a
+child fails, the parent still writes diagnostics and exits with an error so
+invalid runs are not treated as successful measurements.
 
 ## Run Validity
 

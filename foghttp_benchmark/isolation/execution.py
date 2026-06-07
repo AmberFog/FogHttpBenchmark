@@ -1,5 +1,6 @@
 __all__ = ("run_isolated_benchmark",)
 
+import asyncio
 from dataclasses import replace
 import os
 
@@ -17,6 +18,9 @@ from foghttp_benchmark.models import BenchmarkArgs
 from foghttp_benchmark.progress import ProgressReporter, progress_stage, progress_status
 
 
+CHILD_PROCESS_COOLDOWN_S = 5.0
+
+
 async def run_isolated_benchmark(args: BenchmarkArgs, *, progress: ProgressReporter | None = None) -> None:
     args = replace(args, isolation=PER_CLIENT_SCENARIO_ISOLATION)
 
@@ -31,11 +35,13 @@ async def run_isolated_benchmark(args: BenchmarkArgs, *, progress: ProgressRepor
     child_results: list[ChildProcessResult] = []
     env = os.environ.copy()
     with progress_stage(progress, "Isolated child processes", total=len(plan), plain_output="heartbeat") as step:
-        for item in plan:
+        for item_index, item in enumerate(plan):
             step.update(plan_label(item, total=len(plan)))
             result = run_child_process(item, env=env)
             child_results.append(result)
             step.advance(f"{plan_label(item, total=len(plan))} exit={result.returncode}")
+            if item_index < len(plan) - 1:
+                await wait_between_children(progress)
 
     progress_status(progress, "Writing isolated benchmark report")
     write_isolation_report(args, child_results, selection.skipped)
@@ -45,6 +51,11 @@ async def run_isolated_benchmark(args: BenchmarkArgs, *, progress: ProgressRepor
             f"{result.client} exit={result.returncode}" for result in failures
         )
         raise ValueError(msg)
+
+
+async def wait_between_children(progress: ProgressReporter | None) -> None:
+    progress_status(progress, f"Waiting {CHILD_PROCESS_COOLDOWN_S:.1f}s before next isolated child")
+    await asyncio.sleep(CHILD_PROCESS_COOLDOWN_S)
 
 
 def failed_children(results: list[ChildProcessResult]) -> list[ChildProcessResult]:

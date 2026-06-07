@@ -42,6 +42,42 @@ def test_proxy_bypass_error_invalidates_report_with_row_context() -> None:
     assert summary.reasons[0].row["case"] == "proxy-connect"
 
 
+def test_reused_connect_counter_can_be_created_during_warmup() -> None:
+    summary = classify_report_validity(
+        suite=PROXY_CONNECT_SUITE,
+        aggregate_rows=[
+            proxy_row(
+                "proxy-connect",
+                config="explicit",
+                measured_connect=0,
+                total_connect=1,
+            ),
+        ],
+        metadata={},
+    )
+
+    assert summary.status == "valid"
+
+
+def test_cold_connect_requires_measured_connect_counter() -> None:
+    summary = classify_report_validity(
+        suite=PROXY_CONNECT_SUITE,
+        aggregate_rows=[
+            proxy_row(
+                "proxy-connect-cold",
+                config="explicit",
+                lifecycle="cold-client",
+                measured_connect=0,
+                total_connect=20,
+            ),
+        ],
+        metadata={},
+    )
+
+    assert summary.status == "invalid"
+    assert [reason.code for reason in summary.reasons] == ["missing_proxy_connect_counter"]
+
+
 def test_expected_resource_pressure_errors_do_not_invalidate_report() -> None:
     summary = classify_report_validity(
         suite=RESOURCE_BACKPRESSURE_SUITE,
@@ -143,6 +179,7 @@ def proxy_row(
     config: str,
     measured_connect: int,
     total_connect: int,
+    lifecycle: str = "reused-client",
     error_types: dict[str, int] | None = None,
 ) -> JsonObject:
     errors_total = 0 if not error_types else sum(error_types.values())
@@ -153,7 +190,7 @@ def proxy_row(
         "group": "https",
         "target_scheme": "https",
         "config": config,
-        "lifecycle": "reused-client",
+        "lifecycle": lifecycle,
         "concurrency": 10,
         "request_limit": 10,
         "ok_requests_total": 100,
