@@ -1,4 +1,4 @@
-__all__ = ("app", "compare", "main", "run_benchmark")
+__all__ = ("app", "compare", "main", "run_benchmark", "run_benchmark_child")
 
 import asyncio
 from dataclasses import replace
@@ -43,6 +43,7 @@ from foghttp_benchmark.constants import (
 )
 from foghttp_benchmark.creation import run_client_creation_benchmarks
 from foghttp_benchmark.creation_reports import write_creation_reports
+from foghttp_benchmark.isolation import CHILD_PROCESS_ISOLATION, run_isolated_benchmark
 from foghttp_benchmark.models import BenchmarkArgs, ClientSpec
 from foghttp_benchmark.one_upstream import (
     available_one_upstream_clients,
@@ -197,30 +198,42 @@ async def run_benchmark(args: BenchmarkArgs, *, show_progress: bool = True) -> N
     with BenchmarkProgress(enabled=show_progress) as progress:
         progress_status(progress, f"Preparing {args.suite} benchmark")
         validate_suite(args.suite)
-        requested_clients = parse_csv(args.clients)
-        requested_modes = parse_csv(args.modes)
-        if args.suite == ONE_UPSTREAM_SUITE:
-            await run_one_upstream_suite(args, progress=progress)
-        elif args.suite == REQUEST_BUILDER_SUITE:
-            await run_request_builder_suite(args, progress=progress)
-        elif args.suite == RESPONSE_STREAMING_SUITE:
-            await run_response_streaming_suite(args, progress=progress)
-        elif args.suite == PROXY_CONNECT_SUITE:
-            await run_proxy_connect_suite(args, progress=progress)
-        else:
-            clients, skipped = available_clients(requested_clients, requested_modes)
-            if not clients:
-                msg = f"No requested clients are available: {skipped}"
-                raise ValueError(msg)
+        await run_isolated_benchmark(args, progress=progress)
 
-            if args.suite == CLIENT_CREATION_SUITE:
-                await run_client_creation_suite(args, clients, skipped, progress=progress)
-            elif args.suite == RESOURCE_BACKPRESSURE_SUITE:
-                await run_resource_backpressure_suite(args, clients, skipped, progress=progress)
-            elif args.suite == COMPRESSED_RESPONSE_SUITE:
-                await run_compressed_response_suite(args, clients, skipped, progress=progress)
-            else:
-                await run_request_suite(args, clients, skipped, progress=progress)
+
+async def run_benchmark_child(args: BenchmarkArgs, *, show_progress: bool = False) -> None:
+    child_args = replace(args, isolation=CHILD_PROCESS_ISOLATION)
+    with BenchmarkProgress(enabled=show_progress) as progress:
+        progress_status(progress, f"Preparing isolated child {child_args.suite} benchmark")
+        validate_suite(child_args.suite)
+        await run_benchmark_suite(child_args, progress=progress)
+
+
+async def run_benchmark_suite(args: BenchmarkArgs, *, progress: ProgressReporter | None = None) -> None:
+    requested_clients = parse_csv(args.clients)
+    requested_modes = parse_csv(args.modes)
+    if args.suite == ONE_UPSTREAM_SUITE:
+        await run_one_upstream_suite(args, progress=progress)
+    elif args.suite == REQUEST_BUILDER_SUITE:
+        await run_request_builder_suite(args, progress=progress)
+    elif args.suite == RESPONSE_STREAMING_SUITE:
+        await run_response_streaming_suite(args, progress=progress)
+    elif args.suite == PROXY_CONNECT_SUITE:
+        await run_proxy_connect_suite(args, progress=progress)
+    else:
+        clients, skipped = available_clients(requested_clients, requested_modes)
+        if not clients:
+            msg = f"No requested clients are available: {skipped}"
+            raise ValueError(msg)
+
+        if args.suite == CLIENT_CREATION_SUITE:
+            await run_client_creation_suite(args, clients, skipped, progress=progress)
+        elif args.suite == RESOURCE_BACKPRESSURE_SUITE:
+            await run_resource_backpressure_suite(args, clients, skipped, progress=progress)
+        elif args.suite == COMPRESSED_RESPONSE_SUITE:
+            await run_compressed_response_suite(args, clients, skipped, progress=progress)
+        else:
+            await run_request_suite(args, clients, skipped, progress=progress)
 
 
 async def run_request_suite(

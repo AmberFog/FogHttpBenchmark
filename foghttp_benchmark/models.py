@@ -39,6 +39,7 @@ class BenchmarkArgs:
     scenarios: str
     iterations: int
     client_counts: str
+    isolation: str = "per-client-scenario"
 
 
 @dataclass(frozen=True)

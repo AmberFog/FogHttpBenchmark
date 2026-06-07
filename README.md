@@ -206,6 +206,29 @@ Each run writes timestamped JSON and Markdown reports plus `latest.json` and
 ignored by git by default. Publish selected reports intentionally when they are
 part of a release or benchmark note.
 
+## Subprocess Isolation
+
+Benchmark runs are isolated by default. The public CLI always runs selected
+clients and scenarios through sequential subprocesses so one benchmark group
+cannot pollute the next group's loopback, proxy, TLS, environment, descriptor,
+or runtime state:
+
+```bash
+uv run foghttp-benchmark \
+  --suite proxy-connect \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --modes async,sync \
+  --output-dir results/proxy-connect-isolated
+```
+
+The parent process runs each client/scenario pair sequentially in subprocesses,
+each child writes the normal suite-specific report, and the parent writes a
+merged JSON report with child exit codes, stdout/stderr tails, duration, peak
+RSS, threads, and file descriptors. Suites without scenario dimensions fall
+back to per-client subprocess isolation. If a child fails, the parent still
+writes diagnostics and exits with an error so invalid runs are not treated as
+successful measurements.
+
 ## Compare Reports
 
 Use `compare` to turn two JSON reports from the same suite into a compact

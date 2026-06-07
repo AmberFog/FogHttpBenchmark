@@ -1,0 +1,16 @@
+# FogHTTP Benchmark Isolated Report - {{ timestamp }}
+
+- Suite: `{{ args.suite }}`
+- Isolation: `{{ args.isolation }}` / subprocess / sequential {{ unit }} child processes
+- Aggregate rows: `{{ aggregate_count }}`
+- Runs: `{{ run_count }}`
+
+## Child Processes
+
+| # | Client | Scenario | Exit | Duration, s | Peak RSS, MiB | Threads | FDs | Report |
+|---:|---|---|---:|---:|---:|---:|---:|---|
+{% for row in child_rows -%}
+{{ row }}
+{% endfor %}
+
+Detailed suite-specific Markdown reports are stored in each child output directory.
