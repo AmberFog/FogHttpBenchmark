@@ -1,0 +1,34 @@
+{% macro value(value, precision=2) -%}
+{% if value is none -%}
+-
+{%- else -%}
+{{ ("%%.%df" % precision)|format(value) }}
+{%- endif %}
+{%- endmacro %}
+# FogHTTP proxy CONNECT benchmark results
+
+- Timestamp: `{{ timestamp }}`
+- Python: `{{ python_version }}`
+- Platform: `{{ platform_name }}`
+- Server: `local asyncio HTTP/1.1 + HTTPS loopback origin with local HTTP proxy`
+- Proxy: `{{ proxy_url }}`
+- Requests/run: `{{ args.requests }}`
+- Warmup/run: `{{ args.warmup }}`
+- Repeats: `{{ args.repeats }}`
+- Shuffle seed: `{{ args.seed }}`
+
+{% if skipped %}
+## Skipped clients
+
+{% for name, reason in skipped.items() %}
+- `{{ name }}`: {{ reason }}
+{% endfor %}
+
+{% endif %}
+## Aggregate
+
+| mode | client | case | scheme | config | lifecycle | conc | ok/s median | direct ratio | cv % | p95 ms | p99 ms | errors % | measured HTTP proxy | measured CONNECT | total HTTP proxy | total CONNECT | proxy auth | conn opened | conn reused | conn closed | conn aborted | max RSS MB | max threads | max fds | error types |
+| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+{% for row in aggregate %}
+| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.target_scheme }} | {{ row.config }} | {{ row.lifecycle }} | {{ row.concurrency }} | {{ value(row.ok_req_s_median, 1) }} | {{ value(row.direct_ratio, 3) }} | {{ value(row.req_s_cv_percent, 1) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ value(row.error_rate_percent, 2) }} | {{ row.measured_proxy_http_requests_max }} | {{ row.measured_proxy_connect_requests_max }} | {{ row.total_proxy_http_requests_max }} | {{ row.total_proxy_connect_requests_max }} | {{ row.proxy_authorization_headers_max }} | {{ row.final_connections_opened_max if row.final_connections_opened_max is not none else "-" }} | {{ row.final_connections_reused_max if row.final_connections_reused_max is not none else "-" }} | {{ row.final_connections_closed_max if row.final_connections_closed_max is not none else "-" }} | {{ row.final_connections_aborted_max if row.final_connections_aborted_max is not none else "-" }} | {{ value(row.rss_mb_max, 1) }} | {{ row.threads_max }} | {{ row.fds_max }} | `{{ row.error_types }}` |
+{% endfor %}

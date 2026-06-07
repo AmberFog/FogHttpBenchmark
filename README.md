@@ -17,6 +17,9 @@ and a compressed-response suite for transparent `gzip`, `deflate`, and `br`
 decode overhead. For FogHTTP `0.3.2+`, it includes a response-streaming suite
 for full body consumption, slow body chunks, first-chunk latency, text/line
 iteration, and early-close cleanup.
+For FogHTTP `0.3.4+`, it includes a proxy CONNECT suite for explicit
+`proxy=`, `trust_env=True`, HTTP proxy routing, HTTPS CONNECT setup/reuse, and
+short-lived CONNECT client overhead.
 
 ## What It Measures
 
@@ -30,6 +33,7 @@ iteration, and early-close cleanup.
 - pure request builder overhead before network I/O
 - transparent compressed response decode overhead
 - bytes-first response streaming throughput and cleanup
+- explicit proxy and HTTPS CONNECT overhead
 - aggregate buffered response budget behavior
 
 ## Install
@@ -41,7 +45,7 @@ uv sync
 The project dependency on `foghttp` is resolved from PyPI:
 
 ```toml
-"foghttp>=0.3.2,<0.4"
+"foghttp>=0.3.4,<0.4"
 ```
 
 To benchmark a different released version, change the dependency constraint and
@@ -172,6 +176,29 @@ lifecycle counters when available. FogHTTP streaming requires PyPI `0.3.2` or
 newer. Local or pre-release runs should still be labeled explicitly through
 report metadata and the output directory.
 
+## Proxy CONNECT Benchmark
+
+```bash
+uv run foghttp-benchmark \
+  --suite proxy-connect \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --modes async,sync \
+  --requests 100 \
+  --warmup 20 \
+  --repeats 3 \
+  --concurrency 1,10,50 \
+  --output-dir results/proxy-connect
+```
+
+This suite starts local HTTP and HTTPS loopback origins plus a deterministic
+HTTP proxy with CONNECT support. It compares direct baseline, explicit
+`proxy=`, and `trust_env=True` routing for clients with comparable client-level
+proxy APIs. Reports include proxy request counters, CONNECT handshakes,
+latency, throughput, resource peaks, and FogHTTP transport stats when
+available. Clients without comparable client-level proxy support are reported
+as skipped. The suite requires `openssl` on `PATH` to generate a temporary
+local CA and localhost server certificate at runtime.
+
 ## Outputs
 
 Each run writes timestamped JSON and Markdown reports plus `latest.json` and
@@ -219,8 +246,9 @@ only for long-running stages.
 - Higher `ok/s` or lifecycle `ops/s` is better.
 - Lower latency, thread count, file descriptor count, memory delta, and errors
   are better.
-- Local loopback results do not measure real internet latency, DNS behavior,
-  TLS handshake cost, HTTP/2, proxies, cookies, streaming, or auth flows.
+- Local loopback results do not measure real internet latency, real DNS
+  behavior, HTTP/2, cookies, or auth flows. Proxy and HTTPS CONNECT behavior is
+  measured only through the dedicated local proxy suite.
 
 ## Development
 
