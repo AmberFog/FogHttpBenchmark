@@ -7,7 +7,7 @@ import json
 from urllib.parse import parse_qsl, urlsplit
 
 from foghttp_benchmark.compressed_response.payloads import COMPRESSED_RESPONSE_BODIES
-from foghttp_benchmark.constants import MAX_SPLIT_ONCE
+from foghttp_benchmark.constants import BENCHMARK_SERVER_BACKLOG, MAX_SPLIT_ONCE
 from foghttp_benchmark.scenarios import BYTES_64K, HTTP_REASONS, SMALL_JSON
 from foghttp_benchmark.streaming.text_payloads import TEXT_STREAM_CONTENT_TYPE, streaming_text_payloads
 
@@ -19,7 +19,7 @@ HeaderItems = tuple[tuple[str, str], ...]
 
 @asynccontextmanager
 async def benchmark_server() -> AsyncIterator[str]:
-    server = await asyncio.start_server(handle_connection, "127.0.0.1", 0)
+    server = await asyncio.start_server(handle_connection, "127.0.0.1", 0, backlog=BENCHMARK_SERVER_BACKLOG)
     sockets = server.sockets
     if not sockets:
         msg = "benchmark server did not bind a socket"

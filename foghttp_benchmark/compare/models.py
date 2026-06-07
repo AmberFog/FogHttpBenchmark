@@ -26,6 +26,7 @@ BenchmarkSuite: TypeAlias = Literal[
     "request-builder",
     "compressed-response",
     "response-streaming",
+    "proxy-connect",
     "unknown",
 ]
 

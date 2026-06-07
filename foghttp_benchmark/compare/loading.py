@@ -62,6 +62,7 @@ def report_suite(metadata: JsonObject, aggregate_rows: list[JsonObject]) -> Benc
         "request-builder": "request-builder",
         "compressed-response": "compressed-response",
         "response-streaming": "response-streaming",
+        "proxy-connect": "proxy-connect",
     }
     if isinstance(suite, str) and suite in known_suites:
         inferred_suite = known_suites[suite]
@@ -80,6 +81,8 @@ def infer_suite_from_rows(aggregate_rows: list[JsonObject]) -> BenchmarkSuite:
         suite = "client-creation"
     elif "max_pending_requests" in first:
         suite = "resource-backpressure"
+    elif "target_scheme" in first and "config" in first and "case" in first:
+        suite = "proxy-connect"
     elif "profile" in first and "case" in first:
         suite = "one-upstream"
     elif "ok_req_s_median" in first:
@@ -103,6 +106,7 @@ def benchmark_row(suite: BenchmarkSuite, row: JsonObject) -> BenchmarkRow:
         "one-upstream": one_upstream_row,
         "request-builder": request_builder_row,
         "response-streaming": response_streaming_row,
+        "proxy-connect": proxy_connect_row,
     }
     builder = row_builders.get(suite)
     if builder is not None:
@@ -267,6 +271,38 @@ def response_streaming_row(row: JsonObject) -> BenchmarkRow:
         client=client,
         scenario=case,
         primary_value=float_field(row, "ok_streams_s_median"),
+        p95_ms=optional_float_field(row, "p95_ms_median"),
+        p99_ms=optional_float_field(row, "p99_ms_median"),
+        errors_total=int_field(row, "errors_total"),
+        warmup_errors_total=int_field(row, "warmup_errors_total"),
+        error_rate_percent=optional_float_field(row, "error_rate_percent"),
+        rss_mb=optional_float_field(row, "rss_mb_max"),
+        threads=optional_int_field(row, "threads_max"),
+        fds=optional_int_field(row, "fds_max"),
+    )
+
+
+def proxy_connect_row(row: JsonObject) -> BenchmarkRow:
+    mode = str_field(row, "mode")
+    client = str_field(row, "client")
+    case = str_field(row, "case")
+    target_scheme = str_field(row, "target_scheme")
+    config = str_field(row, "config")
+    lifecycle = str_field(row, "lifecycle")
+    concurrency = int_field(row, "concurrency")
+    request_limit = int_field(row, "request_limit")
+    return BenchmarkRow(
+        suite="proxy-connect",
+        identity=(mode, client, case, target_scheme, config, lifecycle, str(concurrency), str(request_limit)),
+        group=(mode, case, target_scheme, config, lifecycle, str(concurrency), str(request_limit)),
+        label=(
+            f"{mode} / {client} / {case} / {target_scheme} / {config} / {lifecycle} "
+            f"/ conc={concurrency} / limit={request_limit}"
+        ),
+        mode=mode,
+        client=client,
+        scenario=case,
+        primary_value=float_field(row, "ok_req_s_median"),
         p95_ms=optional_float_field(row, "p95_ms_median"),
         p99_ms=optional_float_field(row, "p99_ms_median"),
         errors_total=int_field(row, "errors_total"),

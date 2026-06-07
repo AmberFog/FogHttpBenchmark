@@ -21,6 +21,10 @@ from foghttp_benchmark.constants import (
     DEFAULT_MAX_REDIRECTS,
     DEFAULT_MODES,
     DEFAULT_ONE_UPSTREAM_SCENARIOS,
+    DEFAULT_PROXY_CONNECT_CONCURRENCY,
+    DEFAULT_PROXY_CONNECT_REQUESTS,
+    DEFAULT_PROXY_CONNECT_SCENARIOS,
+    DEFAULT_PROXY_CONNECT_WARMUP,
     DEFAULT_REPEATS,
     DEFAULT_REQUEST_BUILDER_SCENARIOS,
     DEFAULT_REQUESTS,
@@ -30,6 +34,7 @@ from foghttp_benchmark.constants import (
     DEFAULT_STREAMING_SCENARIOS,
     DEFAULT_WARMUP,
     ONE_UPSTREAM_SUITE,
+    PROXY_CONNECT_SUITE,
     REQUEST_BUILDER_SUITE,
     REQUESTS_SUITE,
     RESOURCE_BACKPRESSURE_SUITE,
@@ -46,6 +51,14 @@ from foghttp_benchmark.one_upstream import (
     write_one_upstream_reports,
 )
 from foghttp_benchmark.progress import BenchmarkProgress, ProgressReporter, progress_stage, progress_status
+from foghttp_benchmark.proxy_connect import (
+    available_proxy_connect_clients,
+    proxy_connect_cases,
+    run_proxy_connect_benchmarks,
+    write_proxy_connect_reports,
+)
+from foghttp_benchmark.proxy_connect.models import ProxyConnectEndpoints
+from foghttp_benchmark.proxy_connect.proxy_server import benchmark_tls_server, http_proxy_server
 from foghttp_benchmark.reports import write_reports
 from foghttp_benchmark.request_builder import (
     available_request_builder_clients,
@@ -67,6 +80,7 @@ from foghttp_benchmark.streaming import (
 from foghttp_benchmark.validation import (
     validate_client_creation_args,
     validate_one_upstream_args,
+    validate_proxy_connect_args,
     validate_request_benchmark_args,
     validate_request_builder_args,
     validate_resource_backpressure_args,
@@ -94,7 +108,7 @@ def main(
         typer.Option(
             help=(
                 "Benchmark suite: requests, client-creation, resource-backpressure, one-upstream, "
-                "request-builder, compressed-response, or response-streaming."
+                "request-builder, compressed-response, response-streaming, or proxy-connect."
             ),
         ),
     ] = REQUESTS_SUITE,
@@ -187,29 +201,26 @@ async def run_benchmark(args: BenchmarkArgs, *, show_progress: bool = True) -> N
         requested_modes = parse_csv(args.modes)
         if args.suite == ONE_UPSTREAM_SUITE:
             await run_one_upstream_suite(args, progress=progress)
-            return
-        if args.suite == REQUEST_BUILDER_SUITE:
+        elif args.suite == REQUEST_BUILDER_SUITE:
             await run_request_builder_suite(args, progress=progress)
-            return
-        if args.suite == RESPONSE_STREAMING_SUITE:
+        elif args.suite == RESPONSE_STREAMING_SUITE:
             await run_response_streaming_suite(args, progress=progress)
-            return
+        elif args.suite == PROXY_CONNECT_SUITE:
+            await run_proxy_connect_suite(args, progress=progress)
+        else:
+            clients, skipped = available_clients(requested_clients, requested_modes)
+            if not clients:
+                msg = f"No requested clients are available: {skipped}"
+                raise ValueError(msg)
 
-        clients, skipped = available_clients(requested_clients, requested_modes)
-        if not clients:
-            msg = f"No requested clients are available: {skipped}"
-            raise ValueError(msg)
-
-        if args.suite == CLIENT_CREATION_SUITE:
-            await run_client_creation_suite(args, clients, skipped, progress=progress)
-            return
-        if args.suite == RESOURCE_BACKPRESSURE_SUITE:
-            await run_resource_backpressure_suite(args, clients, skipped, progress=progress)
-            return
-        if args.suite == COMPRESSED_RESPONSE_SUITE:
-            await run_compressed_response_suite(args, clients, skipped, progress=progress)
-            return
-        await run_request_suite(args, clients, skipped, progress=progress)
+            if args.suite == CLIENT_CREATION_SUITE:
+                await run_client_creation_suite(args, clients, skipped, progress=progress)
+            elif args.suite == RESOURCE_BACKPRESSURE_SUITE:
+                await run_resource_backpressure_suite(args, clients, skipped, progress=progress)
+            elif args.suite == COMPRESSED_RESPONSE_SUITE:
+                await run_compressed_response_suite(args, clients, skipped, progress=progress)
+            else:
+                await run_request_suite(args, clients, skipped, progress=progress)
 
 
 async def run_request_suite(
@@ -479,6 +490,67 @@ async def run_response_streaming_suite(
     write_streaming_reports(results, skipped, report_args)
 
 
+async def run_proxy_connect_suite(
+    args: BenchmarkArgs,
+    *,
+    progress: ProgressReporter | None = None,
+) -> None:
+    progress_status(progress, "Building proxy CONNECT benchmark plan")
+    requested_clients = parse_csv(args.clients)
+    requested_modes = parse_csv(args.modes)
+    clients, skipped = available_proxy_connect_clients(requested_clients, requested_modes)
+    if not clients:
+        msg = "proxy-connect suite requires foghttp, httpx, or httpxyz clients"
+        raise ValueError(msg)
+    case_map = proxy_connect_cases()
+    requested_cases = proxy_connect_scenario_names(args.scenarios)
+    concurrency_levels = proxy_connect_concurrency_levels(args.concurrency)
+    requests = proxy_connect_requests(args.requests)
+    warmup = proxy_connect_warmup(args.warmup)
+    report_args = proxy_connect_report_args(
+        args,
+        requested_cases=requested_cases,
+        requests=requests,
+        warmup=warmup,
+        concurrency_levels=concurrency_levels,
+    )
+    validate_proxy_connect_args(
+        report_args,
+        requested_cases=requested_cases,
+        case_map=case_map,
+        concurrency_levels=concurrency_levels,
+    )
+    cases = [case_map[name] for name in requested_cases]
+    progress_status(progress, "Starting local HTTP, HTTPS, and proxy benchmark servers")
+    async with (
+        benchmark_server() as http_base_url,
+        benchmark_tls_server() as tls_endpoint,
+        http_proxy_server() as proxy,
+    ):
+        endpoints = ProxyConnectEndpoints(
+            http_base_url=http_base_url,
+            https_base_url=tls_endpoint.base_url,
+            proxy_url=proxy.url,
+            ca_cert_path=tls_endpoint.ca_cert_path,
+        )
+        results = await run_proxy_connect_benchmarks(
+            clients=clients,
+            endpoints=endpoints,
+            proxy_stats=proxy.stats,
+            cases=cases,
+            concurrency_levels=concurrency_levels,
+            requests=requests,
+            warmup=warmup,
+            repeats=args.repeats,
+            shuffle=not args.no_shuffle,
+            seed=args.seed,
+            progress=progress,
+        )
+
+    progress_status(progress, "Writing proxy CONNECT reports")
+    write_proxy_connect_reports(results, skipped, report_args, proxy_url=proxy.url)
+
+
 def request_progress_label(
     *,
     mode: str,
@@ -526,10 +598,34 @@ def streaming_scenario_names(value: str) -> list[str]:
     return parse_csv(value)
 
 
+def proxy_connect_scenario_names(value: str) -> list[str]:
+    if value == DEFAULT_SCENARIOS:
+        return parse_csv(DEFAULT_PROXY_CONNECT_SCENARIOS)
+    return parse_csv(value)
+
+
 def streaming_requests(value: int) -> int:
     if value == DEFAULT_REQUESTS:
         return DEFAULT_STREAMING_REQUESTS
     return value
+
+
+def proxy_connect_requests(value: int) -> int:
+    if value == DEFAULT_REQUESTS:
+        return DEFAULT_PROXY_CONNECT_REQUESTS
+    return value
+
+
+def proxy_connect_warmup(value: int) -> int:
+    if value == DEFAULT_WARMUP:
+        return DEFAULT_PROXY_CONNECT_WARMUP
+    return value
+
+
+def proxy_connect_concurrency_levels(value: str) -> list[int]:
+    if value == DEFAULT_CONCURRENCY:
+        return parse_int_csv(DEFAULT_PROXY_CONNECT_CONCURRENCY)
+    return parse_int_csv(value)
 
 
 def response_streaming_report_args(
@@ -539,6 +635,23 @@ def response_streaming_report_args(
     requests: int,
 ) -> BenchmarkArgs:
     return replace(args, requests=requests, scenarios=",".join(requested_cases))
+
+
+def proxy_connect_report_args(
+    args: BenchmarkArgs,
+    *,
+    requested_cases: list[str],
+    requests: int,
+    warmup: int,
+    concurrency_levels: list[int],
+) -> BenchmarkArgs:
+    return replace(
+        args,
+        requests=requests,
+        warmup=warmup,
+        scenarios=",".join(requested_cases),
+        concurrency=",".join(str(level) for level in concurrency_levels),
+    )
 
 
 def parse_csv(value: str) -> list[str]:
