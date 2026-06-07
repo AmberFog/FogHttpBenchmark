@@ -17,6 +17,16 @@ class RawTransportStats:
     pool_acquire_wait_time_total_ns: int
     pool_acquire_wait_time_max_ns: int
     pool_acquire_wait_time_last_ns: int
+    response_body_reuse_eligible: int
+    response_body_closed: int
+    response_body_aborted: int
+    active_connections: int
+    idle_connections: int
+    connections_opened: int
+    connections_open_failed: int
+    connections_closed: int
+    connections_reused: int
+    connections_aborted: int
     buffered_response_bytes: int
     buffered_response_budget_rejections: int
 
@@ -36,6 +46,16 @@ def test_client_stats_from_dataclass_keeps_known_transport_fields() -> None:
             pool_acquire_wait_time_total_ns=900,
             pool_acquire_wait_time_max_ns=500,
             pool_acquire_wait_time_last_ns=100,
+            response_body_reuse_eligible=11,
+            response_body_closed=12,
+            response_body_aborted=13,
+            active_connections=14,
+            idle_connections=15,
+            connections_opened=16,
+            connections_open_failed=17,
+            connections_closed=18,
+            connections_reused=19,
+            connections_aborted=20,
             buffered_response_bytes=2048,
             buffered_response_budget_rejections=6,
         ),
@@ -54,6 +74,16 @@ def test_client_stats_from_dataclass_keeps_known_transport_fields() -> None:
         "pool_acquire_wait_time_total_ns": 900,
         "pool_acquire_wait_time_max_ns": 500,
         "pool_acquire_wait_time_last_ns": 100,
+        "response_body_reuse_eligible": 11,
+        "response_body_closed": 12,
+        "response_body_aborted": 13,
+        "active_connections": 14,
+        "idle_connections": 15,
+        "connections_opened": 16,
+        "connections_open_failed": 17,
+        "connections_closed": 18,
+        "connections_reused": 19,
+        "connections_aborted": 20,
         "buffered_response_bytes": 2048,
         "buffered_response_budget_rejections": 6,
     }

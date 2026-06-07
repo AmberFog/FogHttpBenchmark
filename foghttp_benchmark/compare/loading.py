@@ -61,25 +61,32 @@ def report_suite(metadata: JsonObject, aggregate_rows: list[JsonObject]) -> Benc
         "one-upstream": "one-upstream",
         "request-builder": "request-builder",
         "compressed-response": "compressed-response",
+        "response-streaming": "response-streaming",
     }
     if isinstance(suite, str) and suite in known_suites:
-        return known_suites[suite]
-    return infer_suite_from_rows(aggregate_rows)
+        inferred_suite = known_suites[suite]
+    else:
+        inferred_suite = infer_suite_from_rows(aggregate_rows)
+    return inferred_suite
 
 
 def infer_suite_from_rows(aggregate_rows: list[JsonObject]) -> BenchmarkSuite:
     first = aggregate_rows[0] if aggregate_rows else {}
     if "kind" in first and "profile" in first and "ops_s_median" in first:
-        return "request-builder"
-    if "ops_s_median" in first:
-        return "client-creation"
-    if "max_pending_requests" in first:
-        return "resource-backpressure"
-    if "profile" in first and "case" in first:
-        return "one-upstream"
-    if "ok_req_s_median" in first:
-        return "requests"
-    return "unknown"
+        suite: BenchmarkSuite = "request-builder"
+    elif "streams_s_median" in first:
+        suite = "response-streaming"
+    elif "ops_s_median" in first:
+        suite = "client-creation"
+    elif "max_pending_requests" in first:
+        suite = "resource-backpressure"
+    elif "profile" in first and "case" in first:
+        suite = "one-upstream"
+    elif "ok_req_s_median" in first:
+        suite = "requests"
+    else:
+        suite = "unknown"
+    return suite
 
 
 def package_versions(metadata: JsonObject) -> dict[str, str]:
@@ -90,14 +97,16 @@ def package_versions(metadata: JsonObject) -> dict[str, str]:
 
 
 def benchmark_row(suite: BenchmarkSuite, row: JsonObject) -> BenchmarkRow:
-    if suite == "client-creation":
-        return client_creation_row(row)
-    if suite == "resource-backpressure":
-        return resource_row(row)
-    if suite == "one-upstream":
-        return one_upstream_row(row)
-    if suite == "request-builder":
-        return request_builder_row(row)
+    row_builders = {
+        "client-creation": client_creation_row,
+        "resource-backpressure": resource_row,
+        "one-upstream": one_upstream_row,
+        "request-builder": request_builder_row,
+        "response-streaming": response_streaming_row,
+    }
+    builder = row_builders.get(suite)
+    if builder is not None:
+        return builder(row)
     return request_row(row, suite=suite)
 
 
@@ -235,6 +244,34 @@ def request_builder_row(row: JsonObject) -> BenchmarkRow:
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=0,
         error_rate_percent=None,
+        rss_mb=optional_float_field(row, "rss_mb_max"),
+        threads=optional_int_field(row, "threads_max"),
+        fds=optional_int_field(row, "fds_max"),
+    )
+
+
+def response_streaming_row(row: JsonObject) -> BenchmarkRow:
+    mode = str_field(row, "mode")
+    client = str_field(row, "client")
+    case = str_field(row, "case")
+    read = str_field(row, "read", "bytes")
+    consume = str_field(row, "consume")
+    concurrency = int_field(row, "concurrency")
+    request_limit = int_field(row, "request_limit")
+    return BenchmarkRow(
+        suite="response-streaming",
+        identity=(mode, client, case, read, consume, str(concurrency), str(request_limit)),
+        group=(mode, case, read, consume, str(concurrency), str(request_limit)),
+        label=f"{mode} / {client} / {case} / {read} / {consume} / conc={concurrency} / limit={request_limit}",
+        mode=mode,
+        client=client,
+        scenario=case,
+        primary_value=float_field(row, "ok_streams_s_median"),
+        p95_ms=optional_float_field(row, "p95_ms_median"),
+        p99_ms=optional_float_field(row, "p99_ms_median"),
+        errors_total=int_field(row, "errors_total"),
+        warmup_errors_total=int_field(row, "warmup_errors_total"),
+        error_rate_percent=optional_float_field(row, "error_rate_percent"),
         rss_mb=optional_float_field(row, "rss_mb_max"),
         threads=optional_int_field(row, "threads_max"),
         fds=optional_int_field(row, "fds_max"),

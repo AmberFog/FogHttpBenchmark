@@ -3,6 +3,7 @@ __all__ = ("available_one_upstream_clients",)
 import importlib
 from typing import Protocol
 
+from foghttp_benchmark.clients.httpxyz_import import import_httpxyz
 from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.one_upstream.cases import (
     DEFAULT_HEADERS,
@@ -96,10 +97,12 @@ def available_one_upstream_clients(
         ASYNC_MODE: {
             "foghttp": make_foghttp_async,
             "httpx": make_httpx_async,
+            "httpxyz": make_httpxyz_async,
         },
         SYNC_MODE: {
             "foghttp": make_foghttp_sync,
             "httpx": make_httpx_sync,
+            "httpxyz": make_httpxyz_sync,
         },
     }
     clients: list[OneUpstreamClientSpec] = []
@@ -115,7 +118,7 @@ def available_one_upstream_clients(
                 skipped[f"{mode}:{name}"] = "one-upstream suite requires comparable client defaults support"
                 continue
             try:
-                importlib.import_module(client_module_name(name))
+                import_client_module(name)
             except Exception as exc:  # noqa: BLE001
                 skipped[f"{mode}:{name}"] = f"{type(exc).__name__}: {exc}"
                 continue
@@ -192,6 +195,38 @@ def make_httpx_sync(config: OneUpstreamClientConfig) -> SyncOneUpstreamAdapter:
             max_keepalive_connections=config.request_limit,
         ),
         timeout=httpx.Timeout(connect=2.0, read=10.0, write=10.0, pool=config.pool_timeout_s),
+        trust_env=False,
+    )
+    return _SyncOneUpstreamClientAdapter(client)
+
+
+def make_httpxyz_async(config: OneUpstreamClientConfig) -> AsyncOneUpstreamAdapter:
+    httpxyz = import_httpxyz()
+    client = httpxyz.AsyncClient(
+        base_url=config.base_url or "",
+        headers=config.headers,
+        params=config.params,
+        limits=httpxyz.Limits(
+            max_connections=config.request_limit,
+            max_keepalive_connections=config.request_limit,
+        ),
+        timeout=httpxyz.Timeout(connect=2.0, read=10.0, write=10.0, pool=config.pool_timeout_s),
+        trust_env=False,
+    )
+    return _AsyncOneUpstreamClientAdapter(client)
+
+
+def make_httpxyz_sync(config: OneUpstreamClientConfig) -> SyncOneUpstreamAdapter:
+    httpxyz = import_httpxyz()
+    client = httpxyz.Client(
+        base_url=config.base_url or "",
+        headers=config.headers,
+        params=config.params,
+        limits=httpxyz.Limits(
+            max_connections=config.request_limit,
+            max_keepalive_connections=config.request_limit,
+        ),
+        timeout=httpxyz.Timeout(connect=2.0, read=10.0, write=10.0, pool=config.pool_timeout_s),
         trust_env=False,
     )
     return _SyncOneUpstreamClientAdapter(client)
@@ -277,6 +312,12 @@ def query_items_from_payload(value: object) -> list[tuple[str, str]] | None:
             return None
         actual.append((key, item_value))
     return actual
+
+
+def import_client_module(name: str) -> object:
+    if name == "httpxyz":
+        return import_httpxyz()
+    return importlib.import_module(client_module_name(name))
 
 
 def client_module_name(name: str) -> str:

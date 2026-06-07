@@ -16,6 +16,8 @@ __all__ = (
     "DEFAULT_REQUEST_BUILDER_SCENARIOS",
     "DEFAULT_RESOURCE_SCENARIOS",
     "DEFAULT_SCENARIOS",
+    "DEFAULT_STREAMING_REQUESTS",
+    "DEFAULT_STREAMING_SCENARIOS",
     "DEFAULT_WARMUP",
     "MAX_SPLIT_ONCE",
     "MIN_VARIATION_SAMPLES",
@@ -23,6 +25,7 @@ __all__ = (
     "REQUESTS_SUITE",
     "REQUEST_BUILDER_SUITE",
     "RESOURCE_BACKPRESSURE_SUITE",
+    "RESPONSE_STREAMING_SUITE",
     "RESULTS_DIR",
     "ROOT",
     "SYNC_MODE",
@@ -37,10 +40,11 @@ RESULTS_DIR = ROOT / "results"
 ASYNC_MODE = "async"
 SYNC_MODE = "sync"
 
-DEFAULT_CLIENTS = "foghttp,httpx,aiohttp,zapros"
+DEFAULT_CLIENTS = "foghttp,httpx,httpxyz,aiohttp,zapros"
 DEFAULT_MODES = ASYNC_MODE
 DEFAULT_CONCURRENCY = "1,10,50,100"
 DEFAULT_REQUESTS = 2000
+DEFAULT_STREAMING_REQUESTS = 200
 DEFAULT_WARMUP = 200
 DEFAULT_REPEATS = 3
 DEFAULT_MAX_REDIRECTS = 20
@@ -92,6 +96,18 @@ DEFAULT_REQUEST_BUILDER_SCENARIOS = (
     "bytes-body,"
     "send-prepared-get"
 )
+DEFAULT_STREAMING_SCENARIOS = (
+    "stream-64k,"
+    "stream-1m,"
+    "drip-64k-1ms,"
+    "first-chunk-close-1m,"
+    "text-64k,"
+    "lines-10k,"
+    "drip-lines-1ms,"
+    "unicode-lines,"
+    "long-line-1m,"
+    "first-line-close-10k"
+)
 
 REQUESTS_SUITE = "requests"
 CLIENT_CREATION_SUITE = "client-creation"
@@ -99,6 +115,7 @@ RESOURCE_BACKPRESSURE_SUITE = "resource-backpressure"
 ONE_UPSTREAM_SUITE = "one-upstream"
 REQUEST_BUILDER_SUITE = "request-builder"
 COMPRESSED_RESPONSE_SUITE = "compressed-response"
+RESPONSE_STREAMING_SUITE = "response-streaming"
 
 BENCHMARK_SEED = 20260507
 MIN_VARIATION_SAMPLES = 2

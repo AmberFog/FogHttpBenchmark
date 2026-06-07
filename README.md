@@ -14,7 +14,9 @@ one-upstream API client suite for `base_url`, client defaults, params merging,
 prepared requests, and request body encoding. It also includes a request
 builder suite for Python-side `build_request()` and query construction cost,
 and a compressed-response suite for transparent `gzip`, `deflate`, and `br`
-decode overhead.
+decode overhead. For FogHTTP `0.3.2+`, it includes a response-streaming suite
+for full body consumption, slow body chunks, first-chunk latency, text/line
+iteration, and early-close cleanup.
 
 ## What It Measures
 
@@ -27,6 +29,7 @@ decode overhead.
 - one-upstream API client overhead for defaults and prepared requests
 - pure request builder overhead before network I/O
 - transparent compressed response decode overhead
+- bytes-first response streaming throughput and cleanup
 - aggregate buffered response budget behavior
 
 ## Install
@@ -38,7 +41,7 @@ uv sync
 The project dependency on `foghttp` is resolved from PyPI:
 
 ```toml
-"foghttp>=0.3,<0.4"
+"foghttp>=0.3.2,<0.4"
 ```
 
 To benchmark a different released version, change the dependency constraint and
@@ -49,7 +52,7 @@ explicit goal is pre-release development analysis.
 
 ```bash
 uv run foghttp-benchmark \
-  --clients foghttp,httpx,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
   --modes async,sync \
   --requests 500 \
   --warmup 50 \
@@ -64,7 +67,7 @@ uv run foghttp-benchmark \
 ```bash
 uv run foghttp-benchmark \
   --suite client-creation \
-  --clients foghttp,httpx,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
   --modes async,sync \
   --iterations 100 \
   --repeats 3 \
@@ -97,7 +100,7 @@ bursts, `max_response_body_size` cleanup, and
 ```bash
 uv run foghttp-benchmark \
   --suite compressed-response \
-  --clients foghttp,httpx,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
   --modes async,sync \
   --requests 1000 \
   --warmup 100 \
@@ -109,15 +112,14 @@ uv run foghttp-benchmark \
 This suite measures transparent decode overhead for buffered compressed
 responses: small JSON, 64 KiB bodies, a high-ratio 1 MiB body, and a multi-field
 `Content-Encoding` response. It is useful for checking the cost of FogHTTP
-`0.3.1` response decoding against clients that already perform automatic
-decompression.
+response decoding against clients that already perform automatic decompression.
 
 ## One-Upstream API Client Benchmark
 
 ```bash
 uv run foghttp-benchmark \
   --suite one-upstream \
-  --clients foghttp,httpx,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
   --modes async,sync \
   --requests 1000 \
   --warmup 100 \
@@ -126,17 +128,17 @@ uv run foghttp-benchmark \
   --output-dir results/one-upstream
 ```
 
-This suite compares `foghttp` and `httpx` in the common service-client pattern:
-one upstream per client, `base_url`, default headers, default params,
-per-request params, JSON/form bodies, and prepared requests. Clients without a
-semantics-compatible defaults API are reported as skipped.
+This suite compares `foghttp`, `httpx`, and `httpxyz` in the common
+service-client pattern: one upstream per client, `base_url`, default headers,
+default params, per-request params, JSON/form bodies, and prepared requests.
+Clients without a semantics-compatible defaults API are reported as skipped.
 
 ## Request Builder Benchmark
 
 ```bash
 uv run foghttp-benchmark \
   --suite request-builder \
-  --clients foghttp,httpx,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
   --modes async,sync \
   --iterations 5000 \
   --warmup 500 \
@@ -148,6 +150,27 @@ This suite measures Python-side `build_request()` cost separately from network
 I/O. Pure build cases do not start a server. The `send-prepared-get` case starts
 the local loopback server and measures the combined build-plus-send path through
 a reused client. Unsupported clients are reported as skipped.
+
+## Response Streaming Benchmark
+
+```bash
+uv run foghttp-benchmark \
+  --suite response-streaming \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --modes async,sync \
+  --requests 200 \
+  --warmup 50 \
+  --repeats 3 \
+  --concurrency 1,10,50 \
+  --output-dir results/response-streaming
+```
+
+This suite measures response streaming across raw bytes, decoded UTF-8 text
+chunks, line iteration, and early-close scenarios. It reports stream throughput,
+MiB/s, lines/s, first-item latency, resource peaks, and FogHTTP transport/body
+lifecycle counters when available. FogHTTP streaming requires PyPI `0.3.2` or
+newer. Local or pre-release runs should still be labeled explicitly through
+report metadata and the output directory.
 
 ## Outputs
 

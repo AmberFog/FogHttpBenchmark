@@ -25,6 +25,7 @@ BenchmarkSuite: TypeAlias = Literal[
     "one-upstream",
     "request-builder",
     "compressed-response",
+    "response-streaming",
     "unknown",
 ]
 

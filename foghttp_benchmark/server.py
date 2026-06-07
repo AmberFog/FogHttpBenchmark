@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, urlsplit
 from foghttp_benchmark.compressed_response.payloads import COMPRESSED_RESPONSE_BODIES
 from foghttp_benchmark.constants import MAX_SPLIT_ONCE
 from foghttp_benchmark.scenarios import BYTES_64K, HTTP_REASONS, SMALL_JSON
+from foghttp_benchmark.streaming.text_payloads import TEXT_STREAM_CONTENT_TYPE, streaming_text_payloads
 
 
 MIN_REDIRECT_PATH_PARTS = 2
@@ -184,21 +185,42 @@ async def write_drip_response(
 ) -> bool:
     request_path = path.split("?", MAX_SPLIT_ONCE)[0]
     parts = request_path.strip("/").split("/")
-    if len(parts) != DRIP_PATH_PARTS or parts[0] != "drip-bytes":
+    if len(parts) != DRIP_PATH_PARTS:
         return False
 
-    size = int(parts[1])
+    if parts[0] == "drip-bytes":
+        size = int(parts[1])
+        chunk_size = int(parts[2])
+        delay_ms = int(parts[3])
+        body = b"x" * size
+        await write_streaming_response(
+            writer,
+            method=method,
+            status_code=200,
+            body=body,
+            chunk_size=chunk_size,
+            delay_ms=delay_ms,
+            content_type=b"application/octet-stream",
+            keep_alive=keep_alive,
+        )
+        return True
+
+    if parts[0] != "drip-text":
+        return False
+
+    payload = streaming_text_payloads().get(parts[1])
+    if payload is None:
+        return False
     chunk_size = int(parts[2])
     delay_ms = int(parts[3])
-    body = b"x" * size
     await write_streaming_response(
         writer,
         method=method,
         status_code=200,
-        body=body,
+        body=payload.body,
         chunk_size=chunk_size,
         delay_ms=delay_ms,
-        content_type=b"application/octet-stream",
+        content_type=TEXT_STREAM_CONTENT_TYPE,
         keep_alive=keep_alive,
     )
     return True
