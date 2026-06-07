@@ -35,10 +35,12 @@ def validity_summary_from_payload(payload: JsonObject) -> ValiditySummary | None
     reason_counts = reason_counts_from_payload(payload.get("reason_counts"))
     if not reason_counts:
         reason_counts = count_reasons(reasons)
+    status_is_valid = status == "valid"
+    status_can_compare = status in ("valid", "warning")
     return ValiditySummary(
         status=status,
-        is_valid=bool_value(payload.get("is_valid"), default=status == "valid"),
-        can_compare=bool_value(payload.get("can_compare"), default=status in ("valid", "warning")),
+        is_valid=bool_value(payload.get("is_valid"), default=status_is_valid) and status_is_valid,
+        can_compare=bool_value(payload.get("can_compare"), default=status_can_compare) and status_can_compare,
         reason_count=int_value(payload.get("reason_count"), len(reasons)),
         reason_counts=reason_counts,
         reasons=reasons,

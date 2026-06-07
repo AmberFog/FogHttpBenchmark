@@ -52,18 +52,18 @@ def test_aggregate_proxy_connect_results_adds_direct_ratios_and_proxy_counters()
 
 
 def test_redacted_proxy_url_hides_userinfo() -> None:
-    credentials = ("bench-user", "bench-pass")
-    proxy_url = f"http://{credentials[0]}:{credentials[1]}@127.0.0.1:8080"
+    userinfo = ("bench-user", "bench-auth")
+    proxy_url = f"http://{userinfo[0]}:{userinfo[1]}@127.0.0.1:8080"
 
     redacted = redacted_proxy_url(proxy_url)
 
     assert redacted == "http://***:***@127.0.0.1:8080"
-    assert credentials[0] not in redacted
-    assert credentials[1] not in redacted
+    assert userinfo[0] not in redacted
+    assert userinfo[1] not in redacted
 
 
 def test_proxy_connect_report_marks_missing_connect_counter_invalid(tmp_path: Path) -> None:
-    credentials = ("bench-user", "bench-pass")
+    userinfo = ("bench-user", "bench-auth")
     write_proxy_connect_reports(
         [
             proxy_connect_result(
@@ -76,7 +76,7 @@ def test_proxy_connect_report_marks_missing_connect_counter_invalid(tmp_path: Pa
         ],
         {},
         benchmark_args(tmp_path),
-        proxy_url=f"http://{credentials[0]}:{credentials[1]}@127.0.0.1:8080",
+        proxy_url=f"http://{userinfo[0]}:{userinfo[1]}@127.0.0.1:8080",
     )
 
     payload = json.loads((tmp_path / "latest.json").read_text())

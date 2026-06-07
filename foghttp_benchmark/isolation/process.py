@@ -18,6 +18,8 @@ from foghttp_benchmark.isolation.models import (
 POLL_INTERVAL_S = 0.1
 TAIL_LINES = 40
 TAIL_CHARS = 4000
+TAIL_READ_CHARS = TAIL_CHARS * 4
+CHILD_OUTPUT_FILES = ("latest.json", "latest.md", "stdout.log", "stderr.log")
 
 
 class ChildProcessSampler:
@@ -56,19 +58,22 @@ def run_child_process(plan_item: ClientIsolationPlanItem, *, env: dict[str, str]
     started_at = time.monotonic()
     plan_item.output_dir.mkdir(parents=True, exist_ok=True)
     clear_stale_latest_files(plan_item.output_dir)
-    process = subprocess.Popen(  # noqa: S603 - command is built from fixed CLI flags and selected client names.
-        plan_item.command,
-        cwd=str(Path.cwd()),
-        env=os.environ.copy() if env is None else env,
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    sampler = ChildProcessSampler(process.pid)
-    while process.poll() is None:
-        sampler.sample()
-        time.sleep(POLL_INTERVAL_S)
-    stdout, stderr = process.communicate()
+    stdout_path = plan_item.output_dir / "stdout.log"
+    stderr_path = plan_item.output_dir / "stderr.log"
+    with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open("w", encoding="utf-8") as stderr_file:
+        process = subprocess.Popen(  # noqa: S603 - command is built from fixed CLI flags and selected client names.
+            plan_item.command,
+            cwd=str(Path.cwd()),
+            env=os.environ.copy() if env is None else env,
+            stderr=stderr_file,
+            stdout=stdout_file,
+            text=True,
+        )
+        sampler = ChildProcessSampler(process.pid)
+        while process.poll() is None:
+            sampler.sample()
+            time.sleep(POLL_INTERVAL_S)
+        returncode = process.wait()
     sampler.sample()
     duration_s = time.monotonic() - started_at
     report_path = plan_item.output_dir / "latest.json"
@@ -80,19 +85,31 @@ def run_child_process(plan_item: ClientIsolationPlanItem, *, env: dict[str, str]
         output_dir=str(plan_item.output_dir),
         report_path=str(report_path) if report_path.exists() else None,
         command=plan_item.command,
-        returncode=process.returncode,
+        returncode=returncode,
         duration_s=duration_s,
         peaks=sampler.peaks,
-        stdout_tail=tail_text(stdout),
-        stderr_tail=tail_text(stderr),
+        stdout_tail=tail_file_text(stdout_path),
+        stderr_tail=tail_file_text(stderr_path),
     )
 
 
 def clear_stale_latest_files(output_dir: Path) -> None:
-    for name in ("latest.json", "latest.md"):
+    for name in CHILD_OUTPUT_FILES:
         path = output_dir / name
         if path.exists():
             path.unlink()
+
+
+def tail_file_text(path: Path) -> str:
+    try:
+        with path.open("rb") as file_handle:
+            file_handle.seek(0, os.SEEK_END)
+            file_size = file_handle.tell()
+            file_handle.seek(max(file_size - TAIL_READ_CHARS, 0))
+            value = file_handle.read().decode(errors="replace")
+    except OSError:
+        return ""
+    return tail_text(value)
 
 
 def tail_text(value: str) -> str:
