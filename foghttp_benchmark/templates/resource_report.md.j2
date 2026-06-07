@@ -1,3 +1,4 @@
+{% import "validity.md.j2" as validity_macros %}
 {% macro value(value, precision=2) -%}
 {% if value is none -%}
 -
@@ -25,6 +26,8 @@
 {% endfor %}
 
 {% endif %}
+{{ validity_macros.summary(validity) }}
+
 ## Aggregate
 
 | mode | scenario | conc | active limit | origin limit | pending limit | buffered budget | ok | errors % | p95 ms | p99 ms | peak active | peak pending | peak buffered bytes | pool timeouts | budget rejects | final buffered bytes | recovery failures | max threads | max fds | error types |

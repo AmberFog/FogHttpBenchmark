@@ -1,7 +1,23 @@
+import json
+from pathlib import Path
+
 import pytest
 
+from foghttp_benchmark.constants import (
+    BENCHMARK_SEED,
+    DEFAULT_CLIENT_COUNTS,
+    DEFAULT_CREATION_ITERATIONS,
+    DEFAULT_MAX_REDIRECTS,
+    DEFAULT_REPEATS,
+    PROXY_CONNECT_SUITE,
+)
+from foghttp_benchmark.models import BenchmarkArgs
 from foghttp_benchmark.proxy_connect.models import ProxyConnectResult, ProxyStatsDelta
-from foghttp_benchmark.proxy_connect.reports import aggregate_proxy_connect_results, redacted_proxy_url
+from foghttp_benchmark.proxy_connect.reports import (
+    aggregate_proxy_connect_results,
+    redacted_proxy_url,
+    write_proxy_connect_reports,
+)
 
 
 EXPECTED_TOTAL_CONNECTS = 2
@@ -46,6 +62,33 @@ def test_redacted_proxy_url_hides_userinfo() -> None:
     assert credentials[1] not in redacted
 
 
+def test_proxy_connect_report_marks_missing_connect_counter_invalid(tmp_path: Path) -> None:
+    credentials = ("bench-user", "bench-pass")
+    write_proxy_connect_reports(
+        [
+            proxy_connect_result(
+                case="proxy-connect",
+                config="explicit",
+                ok_requests_per_second=100.0,
+                measured_proxy=ProxyStatsDelta(0, 0, 0, 0, 0),
+                total_proxy=ProxyStatsDelta(0, 0, 0, 0, 0),
+            ),
+        ],
+        {},
+        benchmark_args(tmp_path),
+        proxy_url=f"http://{credentials[0]}:{credentials[1]}@127.0.0.1:8080",
+    )
+
+    payload = json.loads((tmp_path / "latest.json").read_text())
+    markdown = (tmp_path / "latest.md").read_text()
+
+    assert payload["metadata"]["validity"]["status"] == "invalid"
+    assert payload["metadata"]["validity"]["can_compare"] is False
+    assert payload["metadata"]["validity"]["reasons"][0]["code"] == "missing_proxy_connect_counter"
+    assert "## Run Validity" in markdown
+    assert "missing_proxy_connect_counter" in markdown
+
+
 def proxy_connect_result(
     *,
     case: str,
@@ -88,4 +131,23 @@ def proxy_connect_result(
         total_proxy=total_proxy,
         warmup_error_types={},
         warmup_errors=0,
+    )
+
+
+def benchmark_args(output_dir: Path) -> BenchmarkArgs:
+    return BenchmarkArgs(
+        suite=PROXY_CONNECT_SUITE,
+        clients="foghttp",
+        modes="async",
+        concurrency="1",
+        requests=100,
+        warmup=0,
+        repeats=DEFAULT_REPEATS,
+        max_redirects=DEFAULT_MAX_REDIRECTS,
+        seed=BENCHMARK_SEED,
+        no_shuffle=True,
+        output_dir=str(output_dir),
+        scenarios="proxy-connect",
+        iterations=DEFAULT_CREATION_ITERATIONS,
+        client_counts=DEFAULT_CLIENT_COUNTS,
     )

@@ -136,6 +136,40 @@ def test_compare_infers_request_builder_reports(tmp_path: Path) -> None:
     assert "default-params" in markdown
 
 
+def test_compare_blocks_competitive_position_for_invalid_inputs(tmp_path: Path) -> None:
+    invalid_focus_row = request_row("foghttp", ok_req_s=0.0, p95_ms=2.0)
+    invalid_focus_row["errors_total"] = 10
+    old_report = write_report(
+        tmp_path,
+        "old.json",
+        aggregate=[
+            request_row("foghttp", ok_req_s=100.0, p95_ms=2.0),
+            request_row("httpx", ok_req_s=90.0, p95_ms=3.0),
+        ],
+        suite="requests",
+        foghttp_version="0.3.3",
+    )
+    new_report = write_report(
+        tmp_path,
+        "new.json",
+        aggregate=[
+            invalid_focus_row,
+            request_row("httpx", ok_req_s=95.0, p95_ms=2.0),
+        ],
+        suite="requests",
+        foghttp_version="0.3.4",
+    )
+
+    comparison = build_comparison(old_report, new_report, focus_client="foghttp", top_n=1)
+    markdown = render_compare_markdown(comparison)
+
+    assert comparison.validity.new_status == "needs-rerun"
+    assert comparison.validity.blocks_strong_conclusions
+    assert comparison.wins is None
+    assert "Validity Warning" in markdown
+    assert "Competitive Position" not in markdown
+
+
 def test_compare_rejects_mismatched_suites(tmp_path: Path) -> None:
     old_report = write_report(
         tmp_path,

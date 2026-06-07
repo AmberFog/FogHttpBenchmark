@@ -229,6 +229,28 @@ back to per-client subprocess isolation. If a child fails, the parent still
 writes diagnostics and exits with an error so invalid runs are not treated as
 successful measurements.
 
+## Run Validity
+
+Reports include `metadata.validity` and a Markdown `Run Validity` section. The
+status is one of `valid`, `warning`, `needs-rerun`, or `invalid`:
+
+- `valid`: no detected report-quality issues.
+- `warning`: usable for comparison, but noisy rows need attention.
+- `needs-rerun`: benchmark numbers are diagnostic only until the run is repeated.
+- `invalid`: proxy routing, child process, or report integrity checks failed.
+
+Validity gates detect unexpected measured/warmup errors, suspicious zero
+success throughput, high variation, failed isolated child processes, proxy
+usage guard failures, and missing proxy counters. Resource/backpressure cases
+with intentionally induced `PoolTimeout`, response body limit, or aggregate
+buffered budget errors are treated as expected pressure scenarios; recovery
+failures still mark the run as `needs-rerun`.
+
+Compare reports surface input validity. If either input is `needs-rerun` or
+`invalid`, competitive rankings are blocked and the comparison is diagnostic
+only. Historical monolithic all-client proxy-connect runs from 2026-06-07 are
+diagnostic artifacts, not performance baselines.
+
 ## Compare Reports
 
 Use `compare` to turn two JSON reports from the same suite into a compact
@@ -241,9 +263,9 @@ uv run foghttp-benchmark compare \
   --output results/compare-requests.md
 ```
 
-The comparison highlights geomean and median ratios, competitive wins,
-per-mode/per-scenario deltas, top improvements, top regressions, error rows,
-resource peaks, and unmatched focus rows.
+The comparison highlights geomean and median ratios, competitive wins for valid
+inputs, per-mode/per-scenario deltas, top improvements, top regressions, error
+rows, resource peaks, and unmatched focus rows.
 
 ## Progress Output
 

@@ -1,3 +1,4 @@
+{% import "validity.md.j2" as validity_macros %}
 {% macro value(value, precision=2) -%}
 {% if value is none -%}
 -
@@ -25,6 +26,8 @@
 {% endfor %}
 
 {% endif %}
+{{ validity_macros.summary(validity) }}
+
 ## Aggregate
 
 | mode | client | case | scheme | config | lifecycle | conc | ok/s median | direct ratio | cv % | p95 ms | p99 ms | errors % | measured HTTP proxy | measured CONNECT | total HTTP proxy | total CONNECT | proxy auth | conn opened | conn reused | conn closed | conn aborted | max RSS MB | max threads | max fds | error types |

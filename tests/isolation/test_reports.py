@@ -90,6 +90,8 @@ def test_isolation_report_keeps_failed_child_diagnostics(tmp_path: Path) -> None
     assert child["returncode"] == FAILED_EXIT_CODE
     assert child["stderr_tail"] == "boom"
     assert child["peaks"] == {"fds": 7, "rss_mb": 42.0, "threads": 3}
+    assert payload["metadata"]["validity"]["status"] == "invalid"
+    assert payload["metadata"]["validity"]["reasons"][0]["code"] == "isolated_child_failed"
     assert payload["aggregate"] == []
     assert payload["runs"] == []
 

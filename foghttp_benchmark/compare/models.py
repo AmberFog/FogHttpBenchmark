@@ -4,6 +4,7 @@ __all__ = (
     "BenchmarkSuite",
     "ComparisonMetadata",
     "ComparisonResult",
+    "ComparisonValidity",
     "ErrorRow",
     "JsonObject",
     "ResourceSummary",
@@ -15,6 +16,8 @@ __all__ = (
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeAlias
+
+from foghttp_benchmark.validity.models import ValiditySummary
 
 
 JsonObject: TypeAlias = dict[str, object]
@@ -40,6 +43,7 @@ class BenchmarkReport:
     rows: list["BenchmarkRow"]
     aggregate_rows: list[JsonObject]
     metadata: JsonObject
+    validity: ValiditySummary
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +76,17 @@ class ComparisonMetadata:
     new_timestamp: str
     old_focus_version: str
     new_focus_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonValidity:
+    old_status: str
+    new_status: str
+    blocks_strong_conclusions: bool
+    old_reason_count: int
+    new_reason_count: int
+    old_reasons: tuple[str, ...]
+    new_reasons: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +154,7 @@ class ResourceSummary:
 @dataclass(frozen=True, slots=True)
 class ComparisonResult:
     metadata: ComparisonMetadata
+    validity: ComparisonValidity
     overall: SegmentSummary
     by_mode: list[SegmentSummary]
     by_scenario: list[SegmentSummary]

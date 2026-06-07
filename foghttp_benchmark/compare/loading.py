@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from foghttp_benchmark.compare.models import BenchmarkReport, BenchmarkRow, BenchmarkSuite, JsonObject
+from foghttp_benchmark.validity.classification import validity_summary_from_metadata
 
 
 def load_benchmark_report(path: Path) -> BenchmarkReport:
@@ -12,6 +13,7 @@ def load_benchmark_report(path: Path) -> BenchmarkReport:
     aggregate_rows = object_list_field(payload, "aggregate")
     suite = report_suite(metadata, aggregate_rows)
     rows = [benchmark_row(suite, row) for row in aggregate_rows]
+    validity = validity_summary_from_metadata(metadata, suite, aggregate_rows)
     return BenchmarkReport(
         path=path,
         suite=suite,
@@ -20,6 +22,7 @@ def load_benchmark_report(path: Path) -> BenchmarkReport:
         rows=rows,
         aggregate_rows=aggregate_rows,
         metadata=metadata,
+        validity=validity,
     )
 
 

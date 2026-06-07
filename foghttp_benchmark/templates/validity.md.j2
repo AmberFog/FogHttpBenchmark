@@ -1,0 +1,20 @@
+{% macro summary(validity) -%}
+{% if validity %}
+## Run Validity
+
+- Status: `{{ validity.status }}`
+- Can compare: `{{ validity.can_compare }}`
+- Reasons: `{{ validity.reason_count }}`
+
+{% if validity.reasons %}
+| status | code | row | message |
+| --- | --- | --- | --- |
+{% for reason in validity.reasons %}
+| `{{ reason.status|markdown_table_cell }}` | `{{ reason.code|markdown_table_cell }}` | {{ reason.row_label|markdown_table_cell }} | {{ reason.message|markdown_table_cell }} |
+{% endfor %}
+{% else %}
+No validity issues.
+{% endif %}
+
+{% endif %}
+{%- endmacro %}

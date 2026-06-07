@@ -1,3 +1,4 @@
+{% import "validity.md.j2" as validity_macros %}
 # FogHTTP benchmark results
 
 - Timestamp: `{{ timestamp }}`
@@ -17,6 +18,8 @@
 {% endfor %}
 
 {% endif %}
+{{ validity_macros.summary(validity) }}
+
 ## Aggregate
 
 | mode | client | scenario | conc | limit | ok/s median | req/s median | cv % | p50 ms | p95 ms | p99 ms | errors % | max RSS MB | max threads | max fds |

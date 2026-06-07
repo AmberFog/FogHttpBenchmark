@@ -12,6 +12,7 @@ from foghttp_benchmark.constants import PROXY_CONNECT_SUITE
 from foghttp_benchmark.isolation.models import PER_CLIENT_SCENARIO_ISOLATION, ChildProcessResult
 from foghttp_benchmark.models import BenchmarkArgs, JsonObject
 from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
 def write_isolation_report(
@@ -33,7 +34,7 @@ def write_isolation_report(
     aggregate_rows = normalize_aggregate_rows(args.suite, merge_payload_lists(child_payloads, "aggregate"))
     run_rows = merge_payload_lists(child_payloads, "runs")
     payload: dict[str, object] = {
-        "metadata": metadata,
+        "metadata": metadata_with_validity(metadata, aggregate_rows),
         "aggregate": aggregate_rows,
         "runs": run_rows,
     }
@@ -217,6 +218,8 @@ def render_isolation_markdown(
 ) -> str:
     aggregate = payload.get("aggregate", [])
     runs = payload.get("runs", [])
+    metadata = payload.get("metadata")
+    validity = metadata.get("validity") if isinstance(metadata, dict) else None
     aggregate_count = len(aggregate) if isinstance(aggregate, list) else 0
     run_count = len(runs) if isinstance(runs, list) else 0
     template = report_environment().get_template("isolation_report.md.j2")
@@ -227,6 +230,7 @@ def render_isolation_markdown(
         run_count=run_count,
         timestamp=timestamp,
         unit=isolation_unit(args),
+        validity=validity,
     )
 
 

@@ -1,9 +1,12 @@
+{% import "validity.md.j2" as validity_macros %}
 # FogHTTP Benchmark Isolated Report - {{ timestamp }}
 
 - Suite: `{{ args.suite }}`
 - Isolation: `{{ args.isolation }}` / subprocess / sequential {{ unit }} child processes
 - Aggregate rows: `{{ aggregate_count }}`
 - Runs: `{{ run_count }}`
+
+{{ validity_macros.summary(validity) }}
 
 ## Child Processes
 
