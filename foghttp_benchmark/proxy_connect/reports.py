@@ -18,6 +18,7 @@ from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES, PROXY_CONNECT_SUI
 from foghttp_benchmark.models import BenchmarkArgs, ClientStatKey
 from foghttp_benchmark.proxy_connect.models import ProxyConnectAggregateRow, ProxyConnectResult
 from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
 def aggregate_proxy_connect_results(results: list[ProxyConnectResult]) -> list[ProxyConnectAggregateRow]:
@@ -173,8 +174,10 @@ def write_proxy_connect_reports(
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_proxy_connect_results(results)
     redacted_proxy = redacted_proxy_url(proxy_url)
-    payload = {
-        "metadata": {
+    aggregate_rows = [asdict(row) for row in aggregate]
+    run_rows = [asdict(result) for result in results]
+    metadata_payload = metadata_with_validity(
+        {
             "timestamp": timestamp,
             "python": sys.version,
             "platform": platform.platform(),
@@ -187,8 +190,12 @@ def write_proxy_connect_reports(
             ),
             "skipped": skipped,
         },
-        "aggregate": [asdict(row) for row in aggregate],
-        "runs": [asdict(result) for result in results],
+        aggregate_rows,
+    )
+    payload = {
+        "metadata": metadata_payload,
+        "aggregate": aggregate_rows,
+        "runs": run_rows,
     }
     json_path = output_dir / f"{timestamp}.json"
     md_path = output_dir / f"{timestamp}.md"
@@ -199,7 +206,14 @@ def write_proxy_connect_reports(
     json_path.write_text(json_text + "\n")
     latest_json.write_text(json_text + "\n")
 
-    markdown = render_proxy_connect_markdown_report(timestamp, aggregate, skipped, args, proxy_url=redacted_proxy)
+    markdown = render_proxy_connect_markdown_report(
+        timestamp,
+        aggregate,
+        skipped,
+        args,
+        proxy_url=redacted_proxy,
+        validity=metadata_payload["validity"],
+    )
     md_path.write_text(markdown)
     latest_md.write_text(markdown)
 
@@ -211,6 +225,7 @@ def render_proxy_connect_markdown_report(
     args: BenchmarkArgs,
     *,
     proxy_url: str,
+    validity: object,
 ) -> str:
     template = report_environment().get_template("proxy_connect_report.md.j2")
     return template.render(
@@ -221,6 +236,7 @@ def render_proxy_connect_markdown_report(
         python_version=platform.python_version(),
         skipped=skipped,
         timestamp=timestamp,
+        validity=validity,
     )
 
 

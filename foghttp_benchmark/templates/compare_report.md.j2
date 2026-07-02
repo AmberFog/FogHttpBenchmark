@@ -22,6 +22,28 @@
 - New timestamp: `{{ comparison.metadata.new_timestamp }}`
 - Old {{ comparison.metadata.focus_client }}: `{{ comparison.metadata.old_focus_version }}`
 - New {{ comparison.metadata.focus_client }}: `{{ comparison.metadata.new_focus_version }}`
+- Old validity: `{{ comparison.validity.old_status }}` (`{{ comparison.validity.old_reason_count }}` reasons)
+- New validity: `{{ comparison.validity.new_status }}` (`{{ comparison.validity.new_reason_count }}` reasons)
+
+{% if comparison.validity.blocks_strong_conclusions %}
+## Validity Warning
+
+At least one input report is `needs-rerun` or `invalid`. Strong performance conclusions and competitive rankings are blocked for this comparison; tables below are diagnostic only.
+
+{% if comparison.validity.old_reasons %}
+Old report reasons:
+{% for reason in comparison.validity.old_reasons %}
+- `{{ reason }}`
+{% endfor %}
+{% endif %}
+{% if comparison.validity.new_reasons %}
+New report reasons:
+{% for reason in comparison.validity.new_reasons %}
+- `{{ reason }}`
+{% endfor %}
+{% endif %}
+
+{% endif %}
 
 ## Summary
 

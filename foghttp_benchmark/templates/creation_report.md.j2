@@ -1,3 +1,4 @@
+{% import "validity.md.j2" as validity_macros %}
 {% macro value(value, precision=2) -%}
 {% if value is none -%}
 -
@@ -24,6 +25,8 @@
 {% endfor %}
 
 {% endif %}
+{{ validity_macros.summary(validity) }}
+
 ## Aggregate
 
 | mode | client | scenario | clients | iters | ops/s median | cv % | p50 ms | p95 ms | p99 ms | close p50 ms | peak RSS MB | end RSS MB | peak threads | end threads | peak fds | end fds | errors |

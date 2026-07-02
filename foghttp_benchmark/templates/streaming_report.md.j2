@@ -1,3 +1,4 @@
+{% import "validity.md.j2" as validity_macros %}
 {% macro value(value, precision=2) -%}
 {% if value is none -%}
 -
@@ -24,6 +25,8 @@
 {% endfor %}
 
 {% endif %}
+{{ validity_macros.summary(validity) }}
+
 ## Aggregate
 
 | mode | client | case | read | consume | conc | streams/s median | MiB/s median | lines/s median | cv % | p50 ms | p95 ms | p99 ms | first item p95 ms | errors % | max RSS MB | max threads | max fds | body closed | body reuse | body aborted | conn opened | conn reused | conn closed | conn aborted | idle conn | error types |

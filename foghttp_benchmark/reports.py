@@ -15,6 +15,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES
 from foghttp_benchmark.models import BenchmarkArgs, RunResult
+from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
@@ -95,8 +96,10 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_results(results)
-    payload = {
-        "metadata": {
+    aggregate_rows = [asdict(row) for row in aggregate]
+    run_rows = [asdict(result) for result in results]
+    metadata_payload = metadata_with_validity(
+        {
             "timestamp": timestamp,
             "python": sys.version,
             "platform": platform.platform(),
@@ -108,8 +111,12 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
             ),
             "skipped": skipped,
         },
-        "aggregate": [asdict(row) for row in aggregate],
-        "runs": [asdict(result) for result in results],
+        aggregate_rows,
+    )
+    payload = {
+        "metadata": metadata_payload,
+        "aggregate": aggregate_rows,
+        "runs": run_rows,
     }
     json_path = output_dir / f"{timestamp}.json"
     md_path = output_dir / f"{timestamp}.md"
@@ -120,7 +127,7 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
     json_path.write_text(json_text + "\n")
     latest_json.write_text(json_text + "\n")
 
-    markdown = render_markdown_report(timestamp, aggregate, skipped, args)
+    markdown = render_markdown_report(timestamp, aggregate, skipped, args, metadata_payload["validity"])
     md_path.write_text(markdown)
     latest_md.write_text(markdown)
 
@@ -130,6 +137,7 @@ def render_markdown_report(
     aggregate: list[RequestAggregateRow],
     skipped: dict[str, str],
     args: BenchmarkArgs,
+    validity: object,
 ) -> str:
     template = report_environment().get_template("report.md.j2")
     return template.render(
@@ -139,17 +147,25 @@ def render_markdown_report(
         python_version=platform.python_version(),
         skipped=skipped,
         timestamp=timestamp,
+        validity=validity,
     )
 
 
 def report_environment() -> Environment:
-    return Environment(
+    environment = Environment(
         autoescape=False,  # noqa: S701 - this template renders Markdown, not HTML.
         keep_trailing_newline=True,
         loader=FileSystemLoader(TEMPLATE_DIR),
         lstrip_blocks=True,
         trim_blocks=True,
     )
+    environment.filters["markdown_table_cell"] = markdown_table_cell
+    return environment
+
+
+def markdown_table_cell(value: object) -> str:
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    return text.replace("|", r"\|").replace("\n", "<br>")
 
 
 def package_versions(names: list[str]) -> dict[str, str]:

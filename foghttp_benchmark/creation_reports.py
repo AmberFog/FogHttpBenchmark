@@ -17,6 +17,7 @@ from typing import TypeVar
 from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES
 from foghttp_benchmark.models import BenchmarkArgs, ClientCreationResult
 from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
 OptionalMaxValue = TypeVar("OptionalMaxValue", int, float)
@@ -113,8 +114,10 @@ def write_creation_reports(
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_creation_results(results)
-    payload = {
-        "metadata": {
+    aggregate_rows = [asdict(row) for row in aggregate]
+    run_rows = [asdict(result) for result in results]
+    metadata_payload = metadata_with_validity(
+        {
             "timestamp": timestamp,
             "python": sys.version,
             "platform": platform.platform(),
@@ -126,8 +129,12 @@ def write_creation_reports(
             ),
             "skipped": skipped,
         },
-        "aggregate": [asdict(row) for row in aggregate],
-        "runs": [asdict(result) for result in results],
+        aggregate_rows,
+    )
+    payload = {
+        "metadata": metadata_payload,
+        "aggregate": aggregate_rows,
+        "runs": run_rows,
     }
     json_path = output_dir / f"{timestamp}.json"
     md_path = output_dir / f"{timestamp}.md"
@@ -138,7 +145,7 @@ def write_creation_reports(
     json_path.write_text(json_text + "\n")
     latest_json.write_text(json_text + "\n")
 
-    markdown = render_creation_markdown_report(timestamp, aggregate, skipped, args)
+    markdown = render_creation_markdown_report(timestamp, aggregate, skipped, args, metadata_payload["validity"])
     md_path.write_text(markdown)
     latest_md.write_text(markdown)
 
@@ -148,6 +155,7 @@ def render_creation_markdown_report(
     aggregate: list[ClientCreationAggregateRow],
     skipped: dict[str, str],
     args: BenchmarkArgs,
+    validity: object,
 ) -> str:
     template = report_environment().get_template("creation_report.md.j2")
     return template.render(
@@ -157,4 +165,5 @@ def render_creation_markdown_report(
         python_version=platform.python_version(),
         skipped=skipped,
         timestamp=timestamp,
+        validity=validity,
     )

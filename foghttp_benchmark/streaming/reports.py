@@ -19,6 +19,7 @@ from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES, RESPONSE_STREAMIN
 from foghttp_benchmark.models import BenchmarkArgs, ClientStatKey, JsonObject
 from foghttp_benchmark.reports import package_versions, report_environment
 from foghttp_benchmark.streaming.models import StreamingAggregateRow, StreamingResult
+from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
 SITE_PACKAGE_PATH_KEYS = ("purelib", "platlib")
@@ -129,8 +130,10 @@ def write_streaming_reports(
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_streaming_results(results)
-    payload = {
-        "metadata": {
+    aggregate_rows = [asdict(row) for row in aggregate]
+    run_rows = [asdict(result) for result in results]
+    metadata_payload = metadata_with_validity(
+        {
             "timestamp": timestamp,
             "python": sys.version,
             "platform": platform.platform(),
@@ -143,8 +146,12 @@ def write_streaming_reports(
             "package_sources": package_sources(["foghttp"]),
             "skipped": skipped,
         },
-        "aggregate": [asdict(row) for row in aggregate],
-        "runs": [asdict(result) for result in results],
+        aggregate_rows,
+    )
+    payload = {
+        "metadata": metadata_payload,
+        "aggregate": aggregate_rows,
+        "runs": run_rows,
     }
     json_path = output_dir / f"{timestamp}.json"
     markdown_path = output_dir / f"{timestamp}.md"
@@ -155,7 +162,7 @@ def write_streaming_reports(
     json_path.write_text(json_text + "\n")
     latest_json.write_text(json_text + "\n")
 
-    markdown = render_streaming_markdown_report(timestamp, aggregate, skipped, args)
+    markdown = render_streaming_markdown_report(timestamp, aggregate, skipped, args, metadata_payload["validity"])
     markdown_path.write_text(markdown)
     latest_markdown.write_text(markdown)
 
@@ -165,6 +172,7 @@ def render_streaming_markdown_report(
     aggregate: list[StreamingAggregateRow],
     skipped: dict[str, str],
     args: BenchmarkArgs,
+    validity: object,
 ) -> str:
     template = report_environment().get_template("streaming_report.md.j2")
     return template.render(
@@ -174,6 +182,7 @@ def render_streaming_markdown_report(
         python_version=platform.python_version(),
         skipped=skipped,
         timestamp=timestamp,
+        validity=validity,
     )
 
 

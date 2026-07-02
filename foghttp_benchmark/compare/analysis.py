@@ -11,12 +11,14 @@ from foghttp_benchmark.compare.models import (
     BenchmarkRow,
     ComparisonMetadata,
     ComparisonResult,
+    ComparisonValidity,
     ErrorRow,
     ResourceSummary,
     RowComparison,
     SegmentSummary,
     WinsComparison,
 )
+from foghttp_benchmark.validity.models import ValidityReason
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,10 +56,13 @@ def compare_reports(
             old_focus_version=old_report.package_versions.get(focus_client, "-"),
             new_focus_version=new_report.package_versions.get(focus_client, "-"),
         ),
+        validity=comparison_validity(old_report, new_report),
         overall=summarize_segment("overall", comparisons),
         by_mode=summarize_by(lambda item: item.row.mode, comparisons),
         by_scenario=summarize_by(lambda item: item.row.scenario, comparisons),
-        wins=compare_wins(old_report, new_report, focus_client),
+        wins=None
+        if blocks_strong_conclusions(old_report, new_report)
+        else compare_wins(old_report, new_report, focus_client),
         top_improvements=sorted(comparisons, key=lambda item: item.primary_ratio, reverse=True)[:top_n],
         top_regressions=sorted(comparisons, key=lambda item: item.primary_ratio)[:top_n],
         new_error_rows=error_rows(new_report),
@@ -74,6 +79,26 @@ def validate_comparable_reports(old_report: BenchmarkReport, new_report: Benchma
     if old_report.suite != new_report.suite:
         msg = f"Reports must use the same benchmark suite: old={old_report.suite}, new={new_report.suite}"
         raise ValueError(msg)
+
+
+def comparison_validity(old_report: BenchmarkReport, new_report: BenchmarkReport) -> ComparisonValidity:
+    return ComparisonValidity(
+        old_status=old_report.validity.status,
+        new_status=new_report.validity.status,
+        blocks_strong_conclusions=blocks_strong_conclusions(old_report, new_report),
+        old_reason_count=old_report.validity.reason_count,
+        new_reason_count=new_report.validity.reason_count,
+        old_reasons=tuple(reason_summary(reason) for reason in old_report.validity.reasons),
+        new_reasons=tuple(reason_summary(reason) for reason in new_report.validity.reasons),
+    )
+
+
+def blocks_strong_conclusions(old_report: BenchmarkReport, new_report: BenchmarkReport) -> bool:
+    return not old_report.validity.can_compare or not new_report.validity.can_compare
+
+
+def reason_summary(reason: ValidityReason) -> str:
+    return f"{reason.status}:{reason.code}:{reason.row_label}"
 
 
 def focus_rows_by_identity(report: BenchmarkReport, focus_client: str) -> dict[tuple[str, ...], BenchmarkRow]:

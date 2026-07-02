@@ -11,6 +11,7 @@ from foghttp_benchmark.models import BenchmarkArgs, ResourceBackpressureResult
 from foghttp_benchmark.reports import package_versions, report_environment
 from foghttp_benchmark.resource.reporting.aggregation import aggregate_resource_results
 from foghttp_benchmark.resource.reporting.models import ResourceAggregateRow
+from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
 def write_resource_reports(
@@ -22,8 +23,10 @@ def write_resource_reports(
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_resource_results(results)
-    payload = {
-        "metadata": {
+    aggregate_rows = [asdict(row) for row in aggregate]
+    run_rows = [asdict(result) for result in results]
+    metadata_payload = metadata_with_validity(
+        {
             "timestamp": timestamp,
             "python": sys.version,
             "platform": platform.platform(),
@@ -36,8 +39,12 @@ def write_resource_reports(
             ),
             "skipped": skipped,
         },
-        "aggregate": [asdict(row) for row in aggregate],
-        "runs": [asdict(result) for result in results],
+        aggregate_rows,
+    )
+    payload = {
+        "metadata": metadata_payload,
+        "aggregate": aggregate_rows,
+        "runs": run_rows,
     }
     json_path = output_dir / f"{timestamp}.json"
     md_path = output_dir / f"{timestamp}.md"
@@ -48,7 +55,7 @@ def write_resource_reports(
     json_path.write_text(json_text + "\n")
     latest_json.write_text(json_text + "\n")
 
-    markdown = render_resource_markdown_report(timestamp, aggregate, skipped, args)
+    markdown = render_resource_markdown_report(timestamp, aggregate, skipped, args, metadata_payload["validity"])
     md_path.write_text(markdown)
     latest_md.write_text(markdown)
 
@@ -58,6 +65,7 @@ def render_resource_markdown_report(
     aggregate: list[ResourceAggregateRow],
     skipped: dict[str, str],
     args: BenchmarkArgs,
+    validity: object,
 ) -> str:
     template = report_environment().get_template("resource_report.md.j2")
     return template.render(
@@ -67,4 +75,5 @@ def render_resource_markdown_report(
         python_version=platform.python_version(),
         skipped=skipped,
         timestamp=timestamp,
+        validity=validity,
     )
