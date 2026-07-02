@@ -45,7 +45,7 @@ uv sync
 The project dependency on `foghttp` is resolved from PyPI:
 
 ```toml
-"foghttp>=0.3.4,<0.4"
+"foghttp>=0.3.5,<0.4"
 ```
 
 To benchmark a different released version, change the dependency constraint and
@@ -225,11 +225,23 @@ The parent process runs each client/scenario pair sequentially in subprocesses,
 each child writes the normal suite-specific report, and the parent writes a
 merged JSON report with child exit codes, stdout/stderr tails, duration, peak
 RSS, threads, and file descriptors. Suites without scenario dimensions fall
-back to per-client subprocess isolation. The scheduler waits briefly between
-child processes so loopback sockets, proxy state, TLS state, descriptors, and
-runtime resources can settle before the next measurement group starts. If a
-child fails, the parent still writes diagnostics and exits with an error so
-invalid runs are not treated as successful measurements.
+back to per-client subprocess isolation. The scheduler waits `15s` by default
+between child processes so loopback sockets, proxy state, TLS state,
+descriptors, runtime resources, and OS TCP state can settle before the next
+measurement group starts. Override this only for explicit diagnostics with
+`FOGHTTP_BENCHMARK_CHILD_COOLDOWN_S`; the actual cooldown is written to report
+metadata as `metadata.isolation.child_cooldown_s`. If a child fails, the parent
+still writes diagnostics and exits with an error so invalid runs are not
+treated as successful measurements.
+
+Request-style suites also apply a short per-run settle step after high TCP
+connection churn. This protects full matrices from loopback ephemeral-port and
+`TIME_WAIT` contamination when a client/scenario opens hundreds of short-lived
+connections in one measured run. The default is `3s` after a run with at least
+`256` opened connections or any connection-open failures. Override only for
+explicit diagnostics with `FOGHTTP_BENCHMARK_RUN_COOLDOWN_S` and
+`FOGHTTP_BENCHMARK_RUN_COOLDOWN_OPENED_THRESHOLD`; actual values are written to
+request-style report metadata as `metadata.run_settling`.
 
 ## Run Validity
 

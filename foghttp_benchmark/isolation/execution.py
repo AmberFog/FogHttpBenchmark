@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import replace
 import os
 
+from foghttp_benchmark.isolation.config import child_process_cooldown_s
 from foghttp_benchmark.isolation.models import (
     PER_CLIENT_SCENARIO_ISOLATION,
     ChildProcessResult,
@@ -16,9 +17,6 @@ from foghttp_benchmark.isolation.scenarios import scenario_names_for_isolation
 from foghttp_benchmark.isolation.selection import select_clients_for_isolation
 from foghttp_benchmark.models import BenchmarkArgs
 from foghttp_benchmark.progress import ProgressReporter, progress_stage, progress_status
-
-
-CHILD_PROCESS_COOLDOWN_S = 5.0
 
 
 async def run_isolated_benchmark(args: BenchmarkArgs, *, progress: ProgressReporter | None = None) -> None:
@@ -34,6 +32,7 @@ async def run_isolated_benchmark(args: BenchmarkArgs, *, progress: ProgressRepor
     progress_status(progress, f"Starting {len(plan)} sequential isolated child processes")
     child_results: list[ChildProcessResult] = []
     env = os.environ.copy()
+    cooldown_s = child_process_cooldown_s(env)
     with progress_stage(progress, "Isolated child processes", total=len(plan), plain_output="heartbeat") as step:
         for item_index, item in enumerate(plan):
             step.update(plan_label(item, total=len(plan)))
@@ -41,10 +40,10 @@ async def run_isolated_benchmark(args: BenchmarkArgs, *, progress: ProgressRepor
             child_results.append(result)
             step.advance(f"{plan_label(item, total=len(plan))} exit={result.returncode}")
             if item_index < len(plan) - 1:
-                await wait_between_children(progress)
+                await wait_between_children(progress, cooldown_s=cooldown_s)
 
     progress_status(progress, "Writing isolated benchmark report")
-    write_isolation_report(args, child_results, selection.skipped)
+    write_isolation_report(args, child_results, selection.skipped, child_cooldown_s=cooldown_s)
     failures = failed_children(child_results)
     if failures:
         msg = "Isolated benchmark child process failed: " + ", ".join(
@@ -53,9 +52,9 @@ async def run_isolated_benchmark(args: BenchmarkArgs, *, progress: ProgressRepor
         raise ValueError(msg)
 
 
-async def wait_between_children(progress: ProgressReporter | None) -> None:
-    progress_status(progress, f"Waiting {CHILD_PROCESS_COOLDOWN_S:.1f}s before next isolated child")
-    await asyncio.sleep(CHILD_PROCESS_COOLDOWN_S)
+async def wait_between_children(progress: ProgressReporter | None, *, cooldown_s: float) -> None:
+    progress_status(progress, f"Waiting {cooldown_s:.1f}s before next isolated child")
+    await asyncio.sleep(cooldown_s)
 
 
 def failed_children(results: list[ChildProcessResult]) -> list[ChildProcessResult]:

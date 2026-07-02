@@ -22,6 +22,9 @@ from foghttp_benchmark.models import BenchmarkArgs
 CHILD_COUNT = 2
 FAILED_EXIT_CODE = 2
 EXPECTED_COLD_DIRECT_RATIO = 0.5
+CHILD_COOLDOWN_S = 15.0
+RUN_COOLDOWN_S = 3.0
+RUN_COOLDOWN_OPENED_THRESHOLD = 256
 
 
 def test_isolation_report_merges_successful_child_reports(tmp_path: Path) -> None:
@@ -45,13 +48,23 @@ def test_isolation_report_merges_successful_child_reports(tmp_path: Path) -> Non
         child_result(2, "httpx", second_report),
     ]
 
-    write_isolation_report(args, results, {"async:aiohttp": "unsupported in this suite"})
+    write_isolation_report(
+        args,
+        results,
+        {"async:aiohttp": "unsupported in this suite"},
+        child_cooldown_s=CHILD_COOLDOWN_S,
+    )
 
     payload = json.loads((tmp_path / "parent" / "latest.json").read_text())
     metadata = payload["metadata"]
     assert metadata["suite"] == REQUESTS_SUITE
     assert metadata["isolation"]["backend"] == "subprocess"
     assert metadata["isolation"]["scheduler"] == "sequential"
+    assert metadata["isolation"]["child_cooldown_s"] == CHILD_COOLDOWN_S
+    assert metadata["run_settling"] == {
+        "cooldown_s": RUN_COOLDOWN_S,
+        "opened_connection_threshold": RUN_COOLDOWN_OPENED_THRESHOLD,
+    }
     assert len(metadata["isolation"]["children"]) == CHILD_COUNT
     assert payload["aggregate"] == [
         {"client": "foghttp", "ok_req_s_median": 100.0},
@@ -83,7 +96,7 @@ def test_isolation_report_keeps_failed_child_diagnostics(tmp_path: Path) -> None
         ),
     ]
 
-    write_isolation_report(args, results, {})
+    write_isolation_report(args, results, {}, child_cooldown_s=CHILD_COOLDOWN_S)
 
     payload = json.loads((tmp_path / "parent" / "latest.json").read_text())
     child = payload["metadata"]["isolation"]["children"][0]
@@ -123,6 +136,7 @@ def test_proxy_connect_isolated_report_recomputes_direct_ratios_after_merge(tmp_
         args,
         [child_result(1, "foghttp", direct_report), child_result(2, "foghttp", cold_report)],
         {},
+        child_cooldown_s=CHILD_COOLDOWN_S,
     )
 
     payload = json.loads((tmp_path / "parent" / "latest.json").read_text())
@@ -149,6 +163,10 @@ def write_child_report(
                     "server": "child server",
                     "suite": suite,
                     "package_versions": {"foghttp": "0.3.4"},
+                    "run_settling": {
+                        "cooldown_s": RUN_COOLDOWN_S,
+                        "opened_connection_threshold": RUN_COOLDOWN_OPENED_THRESHOLD,
+                    },
                     "skipped": skipped,
                 },
                 "aggregate": aggregate,

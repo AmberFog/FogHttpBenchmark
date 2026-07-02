@@ -1,11 +1,13 @@
 __all__ = ("run_compressed_response_suite",)
 
+import os
 from typing import TYPE_CHECKING
 
 from foghttp_benchmark.compressed_response.scenarios import compressed_response_scenarios
 from foghttp_benchmark.constants import DEFAULT_COMPRESSED_RESPONSE_SCENARIOS, DEFAULT_SCENARIOS
 from foghttp_benchmark.progress import ProgressReporter, progress_stage, progress_status
 from foghttp_benchmark.reports import write_reports
+from foghttp_benchmark.run_settling import run_settling_config, settle_after_run
 from foghttp_benchmark.runner import build_plan, run_once
 from foghttp_benchmark.server import benchmark_server
 from foghttp_benchmark.validation import validate_request_benchmark_args
@@ -42,6 +44,7 @@ async def run_compressed_response_suite(
         seed=args.seed,
     )
     results: list[RunResult] = []
+    settling_config = run_settling_config(os.environ)
 
     progress_status(progress, "Starting local benchmark server")
     async with benchmark_server() as base_url:
@@ -70,9 +73,10 @@ async def run_compressed_response_suite(
                 )
                 results.append(result)
                 progress_step.advance(label)
+                await settle_after_run(result.client_stats, settling_config, progress=progress)
 
     progress_status(progress, "Writing compressed response reports")
-    write_reports(results, skipped, args)
+    write_reports(results, skipped, args, settling_config=settling_config)
 
 
 def compressed_response_scenario_names(value: str) -> list[str]:

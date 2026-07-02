@@ -2,6 +2,7 @@ __all__ = ("app", "compare", "main", "run_benchmark", "run_benchmark_child")
 
 import asyncio
 from dataclasses import replace
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -69,6 +70,7 @@ from foghttp_benchmark.request_builder import (
 )
 from foghttp_benchmark.resource import resource_cases, run_resource_backpressure_benchmarks
 from foghttp_benchmark.resource.reporting.reports import write_resource_reports
+from foghttp_benchmark.run_settling import run_settling_config, settle_after_run
 from foghttp_benchmark.runner import build_plan, run_once
 from foghttp_benchmark.scenarios import scenarios
 from foghttp_benchmark.server import benchmark_server
@@ -263,6 +265,7 @@ async def run_request_suite(
         seed=args.seed,
     )
     results: list[RunResult] = []
+    settling_config = run_settling_config(os.environ)
 
     progress_status(progress, "Starting local benchmark server")
     async with benchmark_server() as base_url:
@@ -291,9 +294,10 @@ async def run_request_suite(
                 )
                 results.append(result)
                 progress_step.advance(label)
+                await settle_after_run(result.client_stats, settling_config, progress=progress)
 
     progress_status(progress, "Writing request benchmark reports")
-    write_reports(results, skipped, args)
+    write_reports(results, skipped, args, settling_config=settling_config)
 
 
 async def run_client_creation_suite(
@@ -392,6 +396,7 @@ async def run_one_upstream_suite(
         concurrency_levels=concurrency_levels,
     )
     cases = [case_map[name] for name in requested_cases]
+    settling_config = run_settling_config(os.environ)
     progress_status(progress, "Starting local benchmark server")
     async with benchmark_server() as base_url:
         results = await run_one_upstream_benchmarks(
@@ -404,11 +409,12 @@ async def run_one_upstream_suite(
             repeats=args.repeats,
             shuffle=not args.no_shuffle,
             seed=args.seed,
+            settling_config=settling_config,
             progress=progress,
         )
 
     progress_status(progress, "Writing one-upstream reports")
-    write_one_upstream_reports(results, skipped, args)
+    write_one_upstream_reports(results, skipped, args, settling_config=settling_config)
 
 
 async def run_request_builder_suite(

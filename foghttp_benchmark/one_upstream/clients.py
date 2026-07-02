@@ -4,7 +4,9 @@ import importlib
 from typing import Protocol
 
 from foghttp_benchmark.clients.httpxyz_import import import_httpxyz
+from foghttp_benchmark.clients.utils import client_stats_from_raw
 from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
+from foghttp_benchmark.models import ClientStats
 from foghttp_benchmark.one_upstream.cases import (
     DEFAULT_HEADERS,
     DEFAULT_PARAMS,
@@ -71,6 +73,9 @@ class _AsyncOneUpstreamClientAdapter:
     async def close(self) -> None:
         await self.client.aclose()
 
+    def stats(self) -> ClientStats | None:
+        return stats_from_client(self.client)
+
 
 class _SyncOneUpstreamClientAdapter:
     def __init__(self, client: _SyncClient) -> None:
@@ -87,6 +92,16 @@ class _SyncOneUpstreamClientAdapter:
 
     def close(self) -> None:
         self.client.close()
+
+    def stats(self) -> ClientStats | None:
+        return stats_from_client(self.client)
+
+
+def stats_from_client(client: object) -> ClientStats | None:
+    stats = getattr(client, "stats", None)
+    if not callable(stats):
+        return None
+    return client_stats_from_raw(stats())
 
 
 def available_one_upstream_clients(

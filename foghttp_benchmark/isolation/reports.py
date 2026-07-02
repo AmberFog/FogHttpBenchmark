@@ -19,6 +19,8 @@ def write_isolation_report(
     args: BenchmarkArgs,
     child_results: list[ChildProcessResult],
     skipped: dict[str, str],
+    *,
+    child_cooldown_s: float,
 ) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -30,6 +32,7 @@ def write_isolation_report(
         child_results=child_results,
         child_payloads=child_payloads,
         skipped=merge_skipped(skipped, child_payloads),
+        child_cooldown_s=child_cooldown_s,
     )
     aggregate_rows = normalize_aggregate_rows(args.suite, merge_payload_lists(child_payloads, "aggregate"))
     run_rows = merge_payload_lists(child_payloads, "runs")
@@ -76,6 +79,7 @@ def build_metadata(
     child_results: list[ChildProcessResult],
     child_payloads: list[JsonObject],
     skipped: dict[str, str],
+    child_cooldown_s: float,
 ) -> JsonObject:
     first_metadata = first_child_metadata(child_payloads)
     server = first_metadata.get("server", "isolated child benchmark processes")
@@ -84,7 +88,7 @@ def build_metadata(
         versions = package_versions(
             ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
         )
-    return {
+    metadata: JsonObject = {
         "timestamp": timestamp,
         "python": sys.version,
         "platform": platform.platform(),
@@ -98,10 +102,15 @@ def build_metadata(
             "backend": "subprocess",
             "scheduler": "sequential",
             "unit": isolation_unit(args),
+            "child_cooldown_s": child_cooldown_s,
             "child_count": len(child_results),
             "children": [child_result_payload(result) for result in child_results],
         },
     }
+    run_settling = first_metadata.get("run_settling")
+    if isinstance(run_settling, dict):
+        metadata["run_settling"] = run_settling
+    return metadata
 
 
 def isolation_unit(args: BenchmarkArgs) -> str:
