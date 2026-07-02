@@ -6,6 +6,7 @@ __all__ = (
 from collections.abc import Iterable
 from dataclasses import asdict, replace
 import json
+import os
 from pathlib import Path
 import platform
 import statistics
@@ -16,6 +17,7 @@ from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES, ONE_UPSTREAM_SUIT
 from foghttp_benchmark.models import BenchmarkArgs
 from foghttp_benchmark.one_upstream.models import OneUpstreamAggregateRow, OneUpstreamResult
 from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.run_settling import RunSettlingConfig, run_settling_config
 from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
@@ -125,10 +127,13 @@ def write_one_upstream_reports(
     results: list[OneUpstreamResult],
     skipped: dict[str, str],
     args: BenchmarkArgs,
+    *,
+    settling_config: RunSettlingConfig | None = None,
 ) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
+    actual_settling_config = settling_config or run_settling_config(os.environ)
     aggregate = aggregate_one_upstream_results(results)
     aggregate_rows = [asdict(row) for row in aggregate]
     run_rows = [asdict(result) for result in results]
@@ -143,6 +148,10 @@ def write_one_upstream_reports(
             "package_versions": package_versions(
                 ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
+            "run_settling": {
+                "cooldown_s": actual_settling_config.cooldown_s,
+                "opened_connection_threshold": actual_settling_config.opened_connection_threshold,
+            },
             "skipped": skipped,
         },
         aggregate_rows,

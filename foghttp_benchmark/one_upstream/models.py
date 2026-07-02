@@ -16,6 +16,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, TypeAlias
 
+from foghttp_benchmark.models import ClientStats
+
 
 BodyKind: TypeAlias = Literal["none", "json", "form"]
 ProfileKind: TypeAlias = Literal["direct", "base-url", "defaults", "prepared"]
@@ -60,11 +62,15 @@ class AsyncOneUpstreamAdapter(Protocol):
 
     async def close(self) -> None: ...
 
+    def stats(self) -> ClientStats | None: ...
+
 
 class SyncOneUpstreamAdapter(Protocol):
     def request(self, case: OneUpstreamCase, base_url: str) -> bool: ...
 
     def close(self) -> None: ...
+
+    def stats(self) -> ClientStats | None: ...
 
 
 OneUpstreamClientFactory: TypeAlias = Callable[
@@ -112,6 +118,7 @@ class OneUpstreamResult:
     peak_rss_mb: float | None
     peak_threads: int | None
     peak_fds: int | None
+    client_stats: ClientStats | None
 
 
 @dataclass(frozen=True, slots=True)

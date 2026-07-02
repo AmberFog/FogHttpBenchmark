@@ -26,6 +26,7 @@ from foghttp_benchmark.progress import (
     progress_stage,
 )
 from foghttp_benchmark.resources import ResourceSampler
+from foghttp_benchmark.run_settling import RunSettlingConfig, settle_after_run
 from foghttp_benchmark.runner import percentile
 
 
@@ -40,6 +41,7 @@ async def run_one_upstream_benchmarks(
     repeats: int,
     shuffle: bool,
     seed: int,
+    settling_config: RunSettlingConfig,
     progress: ProgressReporter | None = None,
 ) -> list[OneUpstreamResult]:
     plan = build_one_upstream_plan(
@@ -75,6 +77,7 @@ async def run_one_upstream_benchmarks(
             )
             results.append(result)
             progress_step.advance(label)
+            await settle_after_run(result.client_stats, settling_config, progress=progress)
     return results
 
 
@@ -113,6 +116,7 @@ async def run_one_upstream_case(
     config = client_config_for_case(case, base_url=base_url, concurrency=concurrency)
     client = spec.factory(config)
     label = progress_label or f"{spec.mode}/{spec.name} {case.name} concurrency={concurrency} repeat={repeat}"
+    client_stats = None
     try:
         warmup_result = await run_load_with_progress(
             client,
@@ -139,6 +143,7 @@ async def run_one_upstream_case(
                 mode=spec.mode,
             )
         duration = time.perf_counter() - started
+        client_stats = client.stats()
     finally:
         close_result = client.close()
         if inspect.isawaitable(close_result):
@@ -170,6 +175,7 @@ async def run_one_upstream_case(
         peak_rss_mb=sampler.peak_rss_mb,
         peak_threads=sampler.peak_threads,
         peak_fds=sampler.peak_fds,
+        client_stats=client_stats,
     )
 
 

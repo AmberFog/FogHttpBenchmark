@@ -44,6 +44,7 @@ def one_upstream_result(*, case: str, profile: str, ok_requests_per_second: floa
         peak_fds=10,
         peak_rss_mb=20.0,
         peak_threads=2,
+        client_stats=None,
         profile=profile,
         repeat=1,
         request_limit=10,

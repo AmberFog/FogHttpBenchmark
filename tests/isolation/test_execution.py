@@ -35,7 +35,8 @@ def test_isolated_benchmark_waits_between_child_processes(monkeypatch: MonkeyPat
     cooldowns: list[None] = []
     reports: list[list[ChildProcessResult]] = []
 
-    async def fake_wait_between_children(_progress: object) -> None:
+    async def fake_wait_between_children(_progress: object, *, cooldown_s: float) -> None:
+        assert cooldown_s > 0
         cooldowns.append(None)
 
     def fake_run_child_process(
@@ -56,7 +57,7 @@ def test_isolated_benchmark_waits_between_child_processes(monkeypatch: MonkeyPat
     monkeypatch.setattr(
         execution,
         "write_isolation_report",
-        lambda _args, child_results, _skipped: reports.append(child_results),
+        lambda _args, child_results, _skipped, **_kwargs: reports.append(child_results),
     )
 
     asyncio.run(execution.run_isolated_benchmark(args, progress=None))

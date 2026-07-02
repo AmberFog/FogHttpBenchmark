@@ -1,8 +1,10 @@
 __all__ = ("RequestAggregateRow", "aggregate_results", "write_reports")
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from importlib import import_module, metadata
 import json
+import os
 from pathlib import Path
 import platform
 import statistics
@@ -15,6 +17,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES
 from foghttp_benchmark.models import BenchmarkArgs, RunResult
+from foghttp_benchmark.run_settling import RunSettlingConfig, run_settling_config
 from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
@@ -41,6 +44,8 @@ class RequestAggregateRow:
     fds_max: int
     errors_total: int
     warmup_errors_total: int
+    error_types: dict[str, int]
+    warmup_error_types: dict[str, int]
     error_rate_percent: float
 
 
@@ -76,10 +81,20 @@ def aggregate_results(results: list[RunResult]) -> list[RequestAggregateRow]:
                 fds_max=max((item.peak_fds or 0) for item in items),
                 errors_total=errors_total,
                 warmup_errors_total=sum(item.warmup_errors for item in items),
+                error_types=merge_error_types(item.error_types for item in items),
+                warmup_error_types=merge_error_types(item.warmup_error_types for item in items),
                 error_rate_percent=(errors_total / requests_total) * 100 if requests_total else 0.0,
             ),
         )
     return rows
+
+
+def merge_error_types(values: Iterable[dict[str, int]]) -> dict[str, int]:
+    merged: dict[str, int] = {}
+    for error_types in values:
+        for name, count in error_types.items():
+            merged[name] = merged.get(name, 0) + count
+    return merged
 
 
 def coefficient_of_variation(values: list[float]) -> float:
@@ -91,10 +106,17 @@ def coefficient_of_variation(values: list[float]) -> float:
     return (statistics.stdev(values) / mean) * 100
 
 
-def write_reports(results: list[RunResult], skipped: dict[str, str], args: BenchmarkArgs) -> None:
+def write_reports(
+    results: list[RunResult],
+    skipped: dict[str, str],
+    args: BenchmarkArgs,
+    *,
+    settling_config: RunSettlingConfig | None = None,
+) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
+    actual_settling_config = settling_config or run_settling_config(os.environ)
     aggregate = aggregate_results(results)
     aggregate_rows = [asdict(row) for row in aggregate]
     run_rows = [asdict(result) for result in results]
@@ -109,6 +131,10 @@ def write_reports(results: list[RunResult], skipped: dict[str, str], args: Bench
             "package_versions": package_versions(
                 ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
             ),
+            "run_settling": {
+                "cooldown_s": actual_settling_config.cooldown_s,
+                "opened_connection_threshold": actual_settling_config.opened_connection_threshold,
+            },
             "skipped": skipped,
         },
         aggregate_rows,
