@@ -1,0 +1,86 @@
+{% import "validity.md.j2" as validity_macros %}
+{% macro value(item, precision=3) -%}
+{{ ("%%.%df" % precision)|format(item) if item is not none else "-" }}
+{%- endmacro %}
+# FogHTTP controlled async bytes delivery
+
+- Timestamp: `{{ timestamp }}`
+- Schema: `{{ metadata.schema_version }}`; policy: `{{ metadata.policy_version }}`
+- Condition fingerprint: `{{ metadata.condition_fingerprint }}`; full conditions and environment are retained in JSON.
+- Configuration: `{{ metadata.config }}`
+- Resource scope: `{{ metadata.measurement_scope }}`; timing: `{{ metadata.timing_scope }}`.
+- Incremental SHA-256 and bounded scalar observations are included in load. End probes, digest finalization/comparison, replay, sampler teardown, client close and disk/report I/O follow the load end.
+- Only complete, status/framing/length/SHA-256 verified EOF responses contribute verified byte throughput. All observed bytes, including failures, remain separate.
+- Server write size is independent of public client deliveries and does not identify TCP packets or native HTTP frames. FogHTTP uses its native public iterator with no requested read size.
+
+{{ validity_macros.summary(metadata.validity) }}
+
+## Verified delivery
+
+| client | case | conc | fresh repeats | verified bytes/s median | CV % | verified bytes | observed bytes | complete streams | expected streams | first delivery p95 ms | stream p95 ms | chunk bytes min/max | gap p95 ms | sampled gaps | errors |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: |
+{% for row in aggregate %}
+| {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ row.repeats }} | {{ value(row.verified_bytes_s_median) }} | {{ value(row.verified_bytes_s_cv_percent) }} | {{ row.verified_bytes_total }} | {{ row.total_observed_bytes }} | {{ row.complete_streams_total }} | {{ row.expected_streams_total }} | {{ value(row.first_item_p95_ms) }} | {{ value(row.p95_ms_median) }} | {{ value(row.chunk_bytes_min, 0) }}/{{ value(row.chunk_bytes_max, 0) }} | {{ value(row.gap_p95_ms) }} | {{ row.gap_sample_count }} | {{ row.errors_total }} |
+{% endfor %}
+
+Gap samples use the first bounded nonempty public deliveries per stream, exclude first delivery, and use a monotonic clock. Gaps include prior hashing, bookkeeping and configured consumer delay. Sample counts, caps, histograms and diagnostic trace units are in the raw sidecars. Quantiles are descriptive samples, not an exhaustive native latency distribution. Three fresh repetitions and CV at most 10% are required for a performance conclusion.
+
+## Load intervals
+
+| client | conc | load seconds min/max | declared duration reached |
+| --- | ---: | ---: | --- |
+{% for row in aggregate %}
+| {{ row.client }} | {{ row.concurrency }} | {{ value(row.load_duration_s_min, 6) }}/{{ value(row.load_duration_s_max, 6) }} | {{ row.duration_window_complete }} |
+{% endfor %}
+
+An explicit duration window keeps whole rounds running until the target or hard stream cap. Every completed stream retains its own EOF/framing/length/SHA-256 verdict. The exact whole-window chunk histogram shares a fixed bin budget; detailed delivery records remain globally bounded. A stream-limit stop below the target cannot qualify as a long interval. Warmup stays at fixed rounds. Server body write/drain clocks are optional, intrusive observations and require a separate observer-off control; cumulative completed-body totals and phase deltas are retained raw.
+
+## Separate client and server CPU
+
+| client | case | conc | role | user s median | system s median | CPU s/verified byte median | CPU s/wall s median |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+{% for row in aggregate %}
+{% for role, cpu in row.cpu.items() %}
+| {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ role }} | {{ value(cpu.user_s_median, 6) }} | {{ value(cpu.system_s_median, 6) }} | {{ value(cpu.cpu_seconds_per_verified_byte_median, 12) }} | {{ value(cpu.cpu_seconds_per_wall_second_median, 6) }} |
+{% endfor %}
+{% endfor %}
+
+CPU is aggregate process user+system time; concurrent cores can yield CPU/wall above one. Boundary probe spans, counter resolution limitations and missing-value reasons are retained raw. No missing CPU measurement becomes zero.
+
+## Harness overhead replay
+
+| client | case | conc | exact distribution replay | scalar s median | SHA-256 s median | combined s median |
+| --- | --- | ---: | --- | ---: | ---: | ---: |
+{% for row in aggregate %}
+| {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ row.overhead.complete and row.overhead.distribution_complete }} | {{ value(row.overhead.scalar_only_s_median, 6) }} | {{ value(row.overhead.sha256_only_s_median, 6) }} | {{ value(row.overhead.combined_s_median, 6) }} |
+{% endfor %}
+
+Replay runs separately on the observed size histogram, in sorted size order, with explicit byte/chunk/bin limits. It estimates harness costs under synthetic memory/cache conditions. Replay values are never subtracted from measured load. Diagnostic trace and profiler runs are excluded from control comparisons.
+
+For duration windows the exact distribution is replayed in at most 64 segments, each respecting the existing byte/chunk limits. Segment histograms, timing sums and coverage of all observed bytes/chunks are checked; an incomplete replay cannot qualify.
+
+## Per-process resources
+
+| client | case | conc | role | sampled peak RSS bytes | lifetime high-water RSS bytes | sampled max threads | sampled max fds |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+{% for row in aggregate %}
+{% for role, resource in row.resources.items() %}
+| {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ role }} | {{ value(resource.sampled_peak_rss_bytes_max, 0) }} | {{ value(resource.lifetime_high_water_rss_bytes_max, 0) }} | {{ value(resource.sampled_peak_threads_max, 0) }} | {{ value(resource.sampled_peak_fds_max, 0) }} |
+{% endfor %}
+{% endfor %}
+
+{{ metadata.attribution_limits.rss }} Current phase observations, sampled peaks and lifetime high-water values remain distinct; no unavailable server high-water value is inferred from client RSS.
+
+## Attribution limits
+
+{{ metadata.attribution_limits.reason }} {{ metadata.attribution_limits.cpu }} {{ metadata.attribution_limits.overhead }} A healthy separate server does not prove that the server is never the throughput limit. No optimization gain or native mechanism is inferred from these observations alone.
+
+## Raw evidence
+
+Each link contains per-repeat/per-stream delivery observations, bounded per-chunk samples, resource samples, controls, provenance and retained failures. Sidecar checksums and sizes are revalidated when loading this report for comparison.
+
+| sequence | sidecar | bytes | SHA-256 |
+| ---: | --- | ---: | --- |
+{% for item in metadata.raw_evidence %}
+| {{ item.sequence }} | [{{ item.path }}]({{ item.path }}) | {{ item.size_bytes }} | `{{ item.sha256 }}` |
+{% endfor %}

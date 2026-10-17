@@ -9,6 +9,8 @@ def streaming_result(
     mb_per_second: float = 10.0,
     p95_ms: float = 1.0,
     first_chunk_p95_ms: float | None = 0.5,
+    warmup_errors: int = 0,
+    warmup_error_types: dict[str, int] | None = None,
     client_stats: ClientStats | None = None,
 ) -> StreamingResult:
     return StreamingResult(
@@ -37,11 +39,13 @@ def streaming_result(
         first_chunk_p50_ms=0.2,
         first_chunk_p95_ms=first_chunk_p95_ms,
         errors=0,
-        warmup_errors=0,
+        warmup_errors=warmup_errors,
         error_types={},
-        warmup_error_types={},
+        warmup_error_types=warmup_error_types or {},
         peak_rss_mb=100.0,
         peak_threads=4,
         peak_fds=12,
         client_stats=client_stats,
+        verified_eof_bytes_total=1_310_720,
+        verified_eof_chunks_total=160,
     )

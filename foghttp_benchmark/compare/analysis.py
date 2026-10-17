@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import math
 import statistics
 
+from foghttp_benchmark.attribution_evidence import harness_fingerprint
 from foghttp_benchmark.compare.models import (
     BenchmarkReport,
     BenchmarkRow,
@@ -19,6 +20,7 @@ from foghttp_benchmark.compare.models import (
     WinsComparison,
 )
 from foghttp_benchmark.validity.models import ValidityReason
+from foghttp_benchmark.validity.streaming_profiles import uses_streaming_profile
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,8 +37,9 @@ def compare_reports(
     *,
     focus_client: str,
     top_n: int,
+    comparison_axis: str | None = None,
 ) -> ComparisonResult:
-    validate_comparable_reports(old_report, new_report)
+    validate_comparable_reports(old_report, new_report, comparison_axis=comparison_axis)
     old_rows = focus_rows_by_identity(old_report, focus_client)
     new_rows = focus_rows_by_identity(new_report, focus_client)
     shared_keys = sorted(set(old_rows) & set(new_rows))
@@ -55,6 +58,7 @@ def compare_reports(
             new_timestamp=new_report.timestamp,
             old_focus_version=old_report.package_versions.get(focus_client, "-"),
             new_focus_version=new_report.package_versions.get(focus_client, "-"),
+            comparison_axis=comparison_axis,
         ),
         validity=comparison_validity(old_report, new_report),
         overall=summarize_segment("overall", comparisons),
@@ -66,19 +70,50 @@ def compare_reports(
         top_improvements=sorted(comparisons, key=lambda item: item.primary_ratio, reverse=True)[:top_n],
         top_regressions=sorted(comparisons, key=lambda item: item.primary_ratio)[:top_n],
         new_error_rows=error_rows(new_report),
-        resource_summary=resource_summary(old_rows.values(), new_rows.values()),
+        resource_summary=resource_summary(
+            old_rows.values(),
+            new_rows.values(),
+            old_report=old_report,
+            new_report=new_report,
+        ),
         unmatched_old_rows=len(set(old_rows) - set(new_rows)),
         unmatched_new_rows=len(set(new_rows) - set(old_rows)),
     )
 
 
-def validate_comparable_reports(old_report: BenchmarkReport, new_report: BenchmarkReport) -> None:
+def validate_comparable_reports(
+    old_report: BenchmarkReport,
+    new_report: BenchmarkReport,
+    *,
+    comparison_axis: str | None = None,
+) -> None:
     if old_report.suite == "unknown" or new_report.suite == "unknown":
         msg = "Benchmark suite could not be inferred for one of the reports"
         raise ValueError(msg)
     if old_report.suite != new_report.suite:
         msg = f"Reports must use the same benchmark suite: old={old_report.suite}, new={new_report.suite}"
         raise ValueError(msg)
+    if comparison_axis not in {None, "foghttp-source"}:
+        msg = "The supported explicit comparison axis is foghttp-source"
+        raise ValueError(msg)
+    if any(
+        uses_streaming_profile(report.metadata, report.aggregate_rows, "async-bytes")
+        for report in (old_report, new_report)
+    ):
+        if harness_fingerprint(old_report.metadata) != harness_fingerprint(new_report.metadata):
+            msg = "Benchmark harness identities differ; this comparison requires the same measured harness"
+            raise ValueError(msg)
+        old_source, new_source = foghttp_source(old_report), foghttp_source(new_report)
+        if old_source != new_source and comparison_axis != "foghttp-source":
+            msg = "FogHTTP source revisions differ; explicitly select comparison_axis='foghttp-source'"
+            raise ValueError(msg)
+
+
+def foghttp_source(report: BenchmarkReport) -> object:
+    provenance = report.metadata.get("research_provenance")
+    manifest = provenance.get("manifest") if isinstance(provenance, dict) else None
+    source = manifest.get("source") if isinstance(manifest, dict) else None
+    return source.get("sha") if isinstance(source, dict) else None
 
 
 def comparison_validity(old_report: BenchmarkReport, new_report: BenchmarkReport) -> ComparisonValidity:
@@ -102,10 +137,13 @@ def reason_summary(reason: ValidityReason) -> str:
 
 
 def focus_rows_by_identity(report: BenchmarkReport, focus_client: str) -> dict[tuple[str, ...], BenchmarkRow]:
-    return {row.identity: row for row in report.rows if row.client == focus_client}
+    return {row.identity: row for row in report.rows if row.client == focus_client and row.primary_value is not None}
 
 
 def compare_row(old_row: BenchmarkRow, new_row: BenchmarkRow) -> RowComparison:
+    if old_row.primary_value is None or new_row.primary_value is None:
+        msg = "Missing primary measurements cannot be compared"
+        raise ValueError(msg)
     return RowComparison(
         row=new_row,
         old_primary=old_row.primary_value,
@@ -169,7 +207,11 @@ def compare_wins(
 
 
 def wins_for_report(report: BenchmarkReport, focus_client: str) -> WinsSnapshot | None:
-    if report.suite == "resource-backpressure":
+    if (
+        report.suite == "resource-backpressure"
+        or uses_streaming_profile(report.metadata, report.aggregate_rows, "lifecycle")
+        or uses_streaming_profile(report.metadata, report.aggregate_rows, "async-bytes")
+    ):
         return None
     grouped: dict[tuple[str, ...], list[BenchmarkRow]] = defaultdict(list)
     for row in report.rows:
@@ -183,11 +225,19 @@ def wins_for_report(report: BenchmarkReport, focus_client: str) -> WinsSnapshot 
         focus_row = next((row for row in rows if row.client == focus_client), None)
         if focus_row is None:
             continue
-        ranked = sorted(rows, key=lambda row: row.primary_value, reverse=True)
+        ranked = sorted(
+            (row for row in rows if row.primary_value is not None),
+            key=lambda row: row.primary_value or 0,
+            reverse=True,
+        )
+        if not ranked or focus_row.primary_value is None:
+            continue
         winner = ranked[0]
         groups += 1
         if winner.client == focus_client:
             wins += 1
+        if winner.primary_value is None:
+            continue
         ratios.append(safe_ratio(focus_row.primary_value, winner.primary_value))
         ranks.append(float(next(index + 1 for index, row in enumerate(ranked) if row.client == focus_client)))
     return WinsSnapshot(wins=wins, groups=groups, ratios_to_winner=ratios, ranks=ranks)
@@ -215,18 +265,33 @@ def error_rows(report: BenchmarkReport) -> list[ErrorRow]:
 def resource_summary(
     old_rows: Iterable[BenchmarkRow],
     new_rows: Iterable[BenchmarkRow],
+    *,
+    old_report: BenchmarkReport,
+    new_report: BenchmarkReport,
 ) -> ResourceSummary:
     old_list = list(old_rows)
     new_list = list(new_rows)
+    old_scope = str(old_report.metadata.get("measurement_scope", "legacy-unspecified"))
+    new_scope = str(new_report.metadata.get("measurement_scope", "legacy-unspecified"))
+    comparable = old_scope == new_scope
+    reason = (
+        None
+        if comparable
+        else "Process resource measurement scopes differ; RSS, fd and thread values are incomparable."
+    )
     return ResourceSummary(
-        old_rss_mb_max=max_optional(row.rss_mb for row in old_list),
-        new_rss_mb_max=max_optional(row.rss_mb for row in new_list),
-        old_threads_max=max_optional_int(row.threads for row in old_list),
-        new_threads_max=max_optional_int(row.threads for row in new_list),
-        old_fds_max=max_optional_int(row.fds for row in old_list),
-        new_fds_max=max_optional_int(row.fds for row in new_list),
+        old_rss_mb_max=max_optional(row.rss_mb for row in old_list) if comparable else None,
+        new_rss_mb_max=max_optional(row.rss_mb for row in new_list) if comparable else None,
+        old_threads_max=max_optional_int(row.threads for row in old_list) if comparable else None,
+        new_threads_max=max_optional_int(row.threads for row in new_list) if comparable else None,
+        old_fds_max=max_optional_int(row.fds for row in old_list) if comparable else None,
+        new_fds_max=max_optional_int(row.fds for row in new_list) if comparable else None,
         old_errors_total=sum(row.errors_total for row in old_list),
         new_errors_total=sum(row.errors_total for row in new_list),
+        comparable=comparable,
+        old_measurement_scope=old_scope,
+        new_measurement_scope=new_scope,
+        incomparable_reason=reason,
     )
 
 

@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, urlsplit
 from foghttp_benchmark.compressed_response.payloads import COMPRESSED_RESPONSE_BODIES
 from foghttp_benchmark.constants import BENCHMARK_SERVER_BACKLOG, MAX_SPLIT_ONCE
 from foghttp_benchmark.scenarios import BYTES_64K, HTTP_REASONS, SMALL_JSON
+from foghttp_benchmark.streaming.bytes_payloads import streaming_bytes_payload
 from foghttp_benchmark.streaming.text_payloads import TEXT_STREAM_CONTENT_TYPE, streaming_text_payloads
 
 
@@ -192,7 +193,7 @@ async def write_drip_response(
         size = int(parts[1])
         chunk_size = int(parts[2])
         delay_ms = int(parts[3])
-        body = b"x" * size
+        body = streaming_bytes_payload(size)
         await write_streaming_response(
             writer,
             method=method,

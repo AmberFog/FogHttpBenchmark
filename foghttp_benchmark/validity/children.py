@@ -23,6 +23,7 @@ def child_process_reasons(metadata: JsonObject) -> list[ValidityReason]:
         returncode = int_field(child, "returncode")
         report_path = child.get("report_path")
         if returncode == 0 and isinstance(report_path, str) and report_path:
+            reasons.extend(child_provenance_reasons(metadata, child))
             continue
         reasons.append(
             validity_reason(
@@ -33,6 +34,33 @@ def child_process_reasons(metadata: JsonObject) -> list[ValidityReason]:
             ),
         )
     return reasons
+
+
+def child_provenance_reasons(metadata: JsonObject, child: JsonObject) -> list[ValidityReason]:
+    if "research_provenance" not in metadata:
+        return []
+    provenance = child.get("research_provenance")
+    if not isinstance(provenance, dict):
+        return [
+            validity_reason(
+                status="invalid",
+                code="isolated_child_provenance_missing",
+                message="Isolated child report does not contain verified research provenance.",
+                row=child_reference(child),
+            ),
+        ]
+    if provenance != metadata["research_provenance"] or child.get("package_sources") != metadata.get(
+        "package_sources",
+    ):
+        return [
+            validity_reason(
+                status="invalid",
+                code="isolated_child_provenance_mismatch",
+                message="Isolated child research provenance differs from the parent report.",
+                row=child_reference(child),
+            ),
+        ]
+    return []
 
 
 def child_reference(child: JsonObject) -> JsonObject:

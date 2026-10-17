@@ -27,7 +27,7 @@ repos:
       - id: add-trailing-comma
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.46.0
+    rev: v1.51.1
     hooks:
       - id: typos
 
@@ -37,12 +37,14 @@ repos:
       - id: detect-secrets
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.8
+    rev: 0.13.1
     hooks:
       - id: uv-lock
+        args: [--check]
+        always_run: true
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.17.1
     hooks:
       - id: ruff-format
       - id: ruff-check
@@ -51,20 +53,12 @@ repos:
           - --unsafe-fixes
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.20.2
+    rev: v2.4.0
     hooks:
       - id: mypy
-        additional_dependencies:
-          - aiohttp>=3.12,<4
-          - faker>=33
-          - foghttp>=0.2,<0.3
-          - httpx>=0.28,<1
-          - jinja2>=3.1,<4
-          - psutil>=6,<8
-          - typer>=0.16,<1
-          - zapros>=0.11,<1
+        pass_filenames: false
+        types_or: [file]  # Include pyproject.toml and uv.lock through the files filter.
         args:
           - --config-file=pyproject.toml
-          - --install-types
-          - --non-interactive
-        files: ^foghttp_benchmark/.*\.pyi?$
+          - --python-executable=.venv/bin/python
+        files: ^(foghttp_benchmark/.*\.pyi?$|pyproject\.toml$|uv\.lock$)

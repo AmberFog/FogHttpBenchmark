@@ -34,9 +34,7 @@ def write_resource_reports(
             "suite": args.suite,
             "args": vars(args),
             "resource_cases": sorted({result.scenario for result in results}),
-            "package_versions": package_versions(
-                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
-            ),
+            "package_versions": package_versions(),
             "skipped": skipped,
         },
         aggregate_rows,

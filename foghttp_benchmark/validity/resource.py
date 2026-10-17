@@ -25,13 +25,21 @@ EXPECTED_RESOURCE_ERRORS: dict[str, frozenset[str]] = {
 }
 
 
-def unexpected_error_count(suite: str, row: JsonObject, errors_total: int) -> int:
+def unexpected_error_count(
+    suite: str,
+    row: JsonObject,
+    errors_total: int,
+    *,
+    error_field: str = "error_types",
+) -> int:
     if errors_total <= 0:
         return 0
     if suite != RESOURCE_BACKPRESSURE_SUITE:
         return errors_total
     expected_types = EXPECTED_RESOURCE_ERRORS.get(str_field(row, "scenario"), frozenset())
-    error_types = dict_field(row, "error_types")
+    error_types = dict_field(row, error_field)
+    if any(count < 0 for count in error_types.values()) or sum(error_types.values()) != errors_total:
+        return errors_total
     expected_total = sum(int_value(value) for key, value in error_types.items() if key in expected_types)
     return max(0, errors_total - expected_total)
 

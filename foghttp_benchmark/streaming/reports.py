@@ -5,28 +5,23 @@ __all__ = (
 
 from collections.abc import Iterable
 from dataclasses import asdict
-from importlib import import_module
 import json
 from pathlib import Path
 import platform
 import statistics
-import subprocess
 import sys
-import sysconfig
 import time
 
 from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES, RESPONSE_STREAMING_SUITE
-from foghttp_benchmark.models import BenchmarkArgs, ClientStatKey, JsonObject
+from foghttp_benchmark.models import BenchmarkArgs, ClientStatKey
+from foghttp_benchmark.provenance import package_sources
 from foghttp_benchmark.reports import package_versions, report_environment
 from foghttp_benchmark.streaming.models import StreamingAggregateRow, StreamingResult
 from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
-SITE_PACKAGE_PATH_KEYS = ("purelib", "platlib")
-
-
 def aggregate_streaming_results(results: list[StreamingResult]) -> list[StreamingAggregateRow]:
-    grouped: dict[tuple[str, str, str, str, str, int, int], list[StreamingResult]] = {}
+    grouped: dict[tuple[str, str, str, str, str, int, int, str, str], list[StreamingResult]] = {}
     for result in results:
         key = (
             result.mode,
@@ -36,16 +31,18 @@ def aggregate_streaming_results(results: list[StreamingResult]) -> list[Streamin
             result.consume,
             result.concurrency,
             result.request_limit,
+            result.throughput_scope,
+            result.timing_scope,
         )
         grouped.setdefault(key, []).append(result)
     return [build_aggregate_row(key, items) for key, items in sorted(grouped.items())]
 
 
 def build_aggregate_row(
-    key: tuple[str, str, str, str, str, int, int],
+    key: tuple[str, str, str, str, str, int, int, str, str],
     items: list[StreamingResult],
 ) -> StreamingAggregateRow:
-    mode, client, case, read, consume, concurrency, request_limit = key
+    mode, client, case, read, consume, concurrency, request_limit, throughput_scope, timing_scope = key
     requests_total = sum(item.requests for item in items)
     errors_total = sum(item.errors for item in items)
     return StreamingAggregateRow(
@@ -61,6 +58,7 @@ def build_aggregate_row(
         ok_streams_total=sum(item.ok_streams for item in items),
         errors_total=errors_total,
         warmup_errors_total=sum(item.warmup_errors for item in items),
+        warmup_error_types=merge_error_types(item.warmup_error_types for item in items),
         error_rate_percent=(errors_total / requests_total) * 100 if requests_total else 0.0,
         ok_streams_s_median=statistics.median(item.ok_streams_per_second for item in items),
         streams_s_median=statistics.median(item.streams_per_second for item in items),
@@ -87,6 +85,12 @@ def build_aggregate_row(
         final_connections_aborted_max=client_stat_max(items, "connections_aborted"),
         final_idle_connections_max=client_stat_max(items, "idle_connections"),
         error_types=merge_error_types(item.error_types for item in items),
+        bytes_read_total=sum(item.bytes_read_total for item in items),
+        chunks_read_total=sum(item.chunks_read_total for item in items),
+        verified_eof_bytes_total=sum(item.verified_eof_bytes_total for item in items),
+        verified_eof_chunks_total=sum(item.verified_eof_chunks_total for item in items),
+        throughput_scope=throughput_scope,
+        timing_scope=timing_scope,
     )
 
 
@@ -139,10 +143,13 @@ def write_streaming_reports(
             "platform": platform.platform(),
             "server": "local asyncio HTTP/1.1 loopback server",
             "suite": RESPONSE_STREAMING_SUITE,
+            "measurement_scope": "shared-client-server-process-v1",
+            "streaming_metric_schema_version": 2,
+            "bytes_payload_policy": "byte-pattern-0-255-v1",
+            "throughput_scopes": sorted({result.throughput_scope for result in results}),
+            "timing_scopes": sorted({result.timing_scope for result in results}),
             "args": vars(args),
-            "package_versions": package_versions(
-                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
-            ),
+            "package_versions": package_versions(),
             "package_sources": package_sources(["foghttp"]),
             "skipped": skipped,
         },
@@ -184,90 +191,3 @@ def render_streaming_markdown_report(
         timestamp=timestamp,
         validity=validity,
     )
-
-
-def package_sources(names: list[str]) -> dict[str, JsonObject]:
-    sources: dict[str, JsonObject] = {}
-    for name in names:
-        sources[name] = package_source(name)
-    return sources
-
-
-def package_source(name: str) -> JsonObject:
-    try:
-        module = import_module(name)
-    except ImportError:
-        return {"status": "not imported"}
-    module_file = getattr(module, "__file__", None)
-    if not isinstance(module_file, str):
-        return {"status": "unknown"}
-    module_path = Path(module_file).resolve()
-    source: JsonObject = {"module_file": str(module_path)}
-    site_package_root = site_package_root_for(module_path)
-    if site_package_root is not None:
-        source["source_type"] = "installed"
-        source["site_packages_root"] = str(site_package_root)
-        return source
-
-    git_root = find_git_root(module_path)
-    if git_root is None:
-        source["source_type"] = "path"
-        return source
-    source["source_type"] = "local-git"
-    source.update(
-        {
-            "git_root": str(git_root),
-            "git_branch": git_output(git_root, "branch", "--show-current"),
-            "git_sha": git_output(git_root, "rev-parse", "--short", "HEAD"),
-            "git_dirty": bool(git_output(git_root, "status", "--short")),
-        },
-    )
-    return source
-
-
-def site_package_root_for(path: Path) -> Path | None:
-    for root in site_package_roots():
-        if path_is_relative_to(path, root):
-            return root
-    return None
-
-
-def site_package_roots() -> tuple[Path, ...]:
-    roots: list[Path] = []
-    for path_key in SITE_PACKAGE_PATH_KEYS:
-        raw_path = sysconfig.get_path(path_key)
-        root = Path(raw_path).resolve()
-        if root not in roots:
-            roots.append(root)
-    return tuple(roots)
-
-
-def path_is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
-
-
-def find_git_root(path: Path) -> Path | None:
-    for parent in [path.parent, *path.parents]:
-        if (parent / ".git").exists():
-            return parent
-    return None
-
-
-def git_output(repo: Path, *args: str) -> str:
-    try:
-        result = subprocess.run(  # noqa: S603 - git args are fixed local benchmark diagnostics.
-            ["/usr/bin/git", "-C", str(repo), *args],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=2.0,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    if result.returncode != 0:
-        return ""
-    return result.stdout.strip()

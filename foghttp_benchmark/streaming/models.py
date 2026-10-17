@@ -35,6 +35,7 @@ class StreamingCase:
     consume: StreamConsumeMode = "all"
     expected_lines: int | None = None
     description: str = ""
+    expected_sha256: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,8 @@ class StreamingOutcome:
     first_chunk_ms: float | None
     text_chars_read: int = 0
     lines_read: int = 0
+    body_sha256: str | None = None
+    eof_received: bool = False
 
 
 class AsyncStreamingAdapter(Protocol):
@@ -95,6 +98,8 @@ class StreamingLoadResult:
     lines_read: int
     errors: int
     error_types: dict[str, int]
+    verified_eof_bytes: int = 0
+    verified_eof_chunks: int = 0
 
 
 @dataclass
@@ -131,6 +136,10 @@ class StreamingResult:
     peak_threads: int | None
     peak_fds: int | None
     client_stats: ClientStats | None
+    verified_eof_bytes_total: int = 0
+    verified_eof_chunks_total: int = 0
+    throughput_scope: str = "verified-eof-v2"
+    timing_scope: str = "load-only-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +156,7 @@ class StreamingAggregateRow:
     ok_streams_total: int
     errors_total: int
     warmup_errors_total: int
+    warmup_error_types: dict[str, int]
     error_rate_percent: float
     ok_streams_s_median: float
     streams_s_median: float
@@ -173,3 +183,9 @@ class StreamingAggregateRow:
     final_connections_aborted_max: int | None
     final_idle_connections_max: int | None
     error_types: dict[str, int]
+    bytes_read_total: int = 0
+    chunks_read_total: int = 0
+    verified_eof_bytes_total: int = 0
+    verified_eof_chunks_total: int = 0
+    throughput_scope: str = "verified-eof-v2"
+    timing_scope: str = "load-only-v2"

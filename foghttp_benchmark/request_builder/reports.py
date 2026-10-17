@@ -131,9 +131,7 @@ def write_request_builder_reports(
             "server": "none for build cases; local asyncio HTTP/1.1 loopback server for send-prepared cases",
             "suite": REQUEST_BUILDER_SUITE,
             "args": vars(args),
-            "package_versions": package_versions(
-                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
-            ),
+            "package_versions": package_versions(),
             "skipped": skipped,
         },
         aggregate_rows,

@@ -1,0 +1,74 @@
+{% import "validity.md.j2" as validity_macros %}
+{% macro value(value, precision=2) -%}
+{% if value is none -%}
+-
+{%- else -%}
+{{ ("%%.%df" % precision)|format(value) }}
+{%- endif %}
+{%- endmacro %}
+# FogHTTP streaming lifecycle results
+
+- Timestamp: `{{ timestamp }}`
+- Measurement scope: `{{ metadata.measurement_scope }}`
+- Config: `{{ metadata.config }}`
+- Source identity: `{{ metadata.package_sources }}`
+- Harness identity: `{{ metadata.harness_source.module_file }}`; full checkout fingerprint or verified installed-wheel provenance is retained in JSON.
+- Every case has fresh, separately owned client/server PIDs; the parent samples outside the client event loop.
+- RSS units are bytes. Current RSS phase samples, sampled maxima and lifetime high-water observations remain separate.
+- Sample interval: `{{ metadata.sampling.interval_s }}` seconds. Actual monotonic intervals and unavailable metric reasons are retained in JSON.
+- {{ metadata.sampling.limitations }}
+- {{ metadata.comparison_policy }}
+
+{{ validity_macros.summary(metadata.validity) }}
+
+## Delivery and lifecycle timing
+
+| mode | client | case | conc | fresh repetitions | successful | streams/s median | CV % | first item p95 ms | close return p95 ms | recovery p95 ms | delivered bytes | verified control aborts | errors | warmup errors |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{% for row in aggregate %}
+| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ row.repeats }} | {{ row.successful_repeats }} | {{ value(row.ok_streams_s_median) }} | {{ value(row.streams_s_cv_percent) }} | {{ value(row.first_item_p95_ms) }} | {{ value(row.close_return_p95_ms) }} | {{ value(row.recovery_p95_ms) }} | {{ row.bytes_read_total }} | {{ row.expected_aborts_total }} | {{ row.errors_total }} | {{ row.warmup_errors_total }} |
+{% endfor %}
+
+Rates are computed per fresh repetition over measured batches. Construction, warmup, controls and client close are reported separately. Parent probes may affect timing; their overhead is not claimed to be zero. Warmup and all individual stream/frame observations remain in JSON. CV requires at least three fresh repetitions; the predeclared flag is 10%.
+
+## Per-process resources
+
+| mode | client | case | conc | role | sampled peak RSS bytes | lifetime high-water RSS bytes | sampled max threads | sampled max fds |
+| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+{% for row in aggregate %}
+{% for role, resource in row.resources.items() %}
+| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ role }} | {{ value(resource.sampled_peak_rss_bytes_max, 0) }} | {{ value(resource.lifetime_high_water_rss_bytes_max, 0) }} | {{ value(resource.sampled_peak_threads_max, 0) }} | {{ value(resource.sampled_peak_fds_max, 0) }} |
+{% endfor %}
+{% endfor %}
+
+Unavailable aggregate metrics retain reasons in JSON `resources.unavailable`; no missing measurement is replaced by zero. Server lifetime high-water is unavailable because it is not exposed by the external parent probe.
+
+## Current resources at declared phases
+
+| mode | client | case | conc | role | phase | current RSS bytes median | threads median | fds median |
+| --- | --- | --- | ---: | --- | --- | ---: | ---: | ---: |
+{% for row in aggregate %}
+{% for phase in row.phase_resources %}
+| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ phase.role }} | {{ phase.phase }} | {{ value(phase.rss_bytes_median, 0) }} | {{ value(phase.threads_median, 0) }} | {{ value(phase.fds_median, 0) }} |
+{% endfor %}
+{% endfor %}
+
+## CPU deltas by declared phase
+
+| mode | client | case | conc | role | from phase | to phase | user seconds median | system seconds median |
+| --- | --- | --- | ---: | --- | --- | --- | ---: | ---: |
+{% for row in aggregate %}
+{% for delta in row.cpu_phase_deltas %}
+| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ delta.role }} | {{ delta.from_phase }} | {{ delta.to_phase }} | {{ value(delta.user_s_median, 6) }} | {{ value(delta.system_s_median, 6) }} |
+{% endfor %}
+{% endfor %}
+
+## Process ownership and failures
+
+| sequence | mode | client | case | conc | repetition | parent PID | client PID | server PID | worker status | failure |
+| ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+{% for child in metadata.lifecycle.cases %}
+| {{ child.sequence }} | {{ child.mode }} | {{ child.client }} | {{ child.case }} | {{ child.concurrency }} | {{ child.repeat }} | {{ child.parent_pid }} | {{ child.client_pid }} | {{ child.server_pid }} | {{ child.worker_status }} | {{ child.failure or "-" }} |
+{% endfor %}
+
+Complete per-PID phase/sample series, metric availability, controls, public counters, output tails and partial failure reports are retained in the matching JSON `runs` entries. A successful EOF recovery is required after intentional close/cancellation controls. Unsupported sync cancellation controls carry an explicit reason.

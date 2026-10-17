@@ -67,6 +67,7 @@ def build_aggregate_row(
         ok_requests_total=sum(item.ok_requests for item in items),
         errors_total=errors_total,
         warmup_errors_total=sum(item.warmup_errors for item in items),
+        warmup_error_types=merge_error_types(item.warmup_error_types for item in items),
         error_rate_percent=(errors_total / requests_total) * 100 if requests_total else 0.0,
         ok_req_s_median=statistics.median(item.ok_requests_per_second for item in items),
         req_s_median=statistics.median(item.requests_per_second for item in items),
@@ -145,9 +146,7 @@ def write_one_upstream_reports(
             "server": "local asyncio HTTP/1.1 loopback server",
             "suite": ONE_UPSTREAM_SUITE,
             "args": vars(args),
-            "package_versions": package_versions(
-                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
-            ),
+            "package_versions": package_versions(),
             "run_settling": {
                 "cooldown_s": actual_settling_config.cooldown_s,
                 "opened_connection_threshold": actual_settling_config.opened_connection_threshold,

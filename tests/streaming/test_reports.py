@@ -1,3 +1,4 @@
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -27,6 +28,7 @@ EXPECTED_CONNECTIONS_OPENED = 2
 EXPECTED_CONNECTIONS_REUSED = 10
 EXPECTED_CONNECTIONS_CLOSED = 2
 EXPECTED_CONNECTIONS_ABORTED = 3
+EXPECTED_WARMUP_ERRORS_TOTAL = 3
 
 
 def test_aggregate_streaming_results_keeps_lifecycle_stats() -> None:
@@ -91,6 +93,59 @@ def test_aggregate_streaming_results_keeps_lifecycle_stats() -> None:
     assert row.final_connections_closed_max == EXPECTED_CONNECTIONS_CLOSED
     assert row.final_connections_aborted_max == EXPECTED_CONNECTIONS_ABORTED
     assert row.final_idle_connections_max == 1
+
+
+def test_aggregate_streaming_results_preserves_warmup_error_types() -> None:
+    rows = aggregate_streaming_results(
+        [
+            streaming_result(
+                warmup_errors=2,
+                warmup_error_types={"LineTooLong": 2},
+            ),
+            streaming_result(
+                warmup_errors=1,
+                warmup_error_types={"TimeoutError": 1},
+            ),
+        ],
+    )
+
+    assert rows[0].warmup_errors_total == EXPECTED_WARMUP_ERRORS_TOTAL
+    assert rows[0].warmup_error_types == {
+        "LineTooLong": 2,
+        "TimeoutError": 1,
+    }
+
+
+def test_aggregate_preserves_observed_and_verified_totals_without_mixing_timing_scopes() -> None:
+    good = streaming_result()
+    failed = replace(good, verified_eof_bytes_total=0, verified_eof_chunks_total=0, errors=good.requests)
+    incompatible = replace(good, timing_scope="includes-sampler-teardown-v1")
+    rows = aggregate_streaming_results([good, failed, incompatible])
+
+    assert len(rows) == len({good.timing_scope, incompatible.timing_scope})
+    current = next(row for row in rows if row.timing_scope == good.timing_scope)
+    assert current.repeats == len([good, failed])
+    assert current.bytes_read_total == good.bytes_read_total + failed.bytes_read_total
+    assert current.chunks_read_total == good.chunks_read_total + failed.chunks_read_total
+    assert current.verified_eof_bytes_total == good.verified_eof_bytes_total
+    assert current.verified_eof_chunks_total == good.verified_eof_chunks_total
+
+
+def test_report_retains_verified_eof_policy_and_counts(tmp_path: Path) -> None:
+    result = streaming_result()
+    write_streaming_reports([result], {}, benchmark_args(tmp_path))
+    payload = json.loads((tmp_path / "latest.json").read_text())
+    row = payload["aggregate"][0]
+
+    assert row["verified_eof_bytes_total"] == result.verified_eof_bytes_total
+    assert row["bytes_read_total"] == result.bytes_read_total
+    assert row["throughput_scope"] == result.throughput_scope
+    assert row["timing_scope"] == result.timing_scope
+    assert payload["metadata"]["timing_scopes"] == [result.timing_scope]
+    markdown = (tmp_path / "latest.md").read_text()
+    assert "verified EOF MiB/s" in markdown
+    assert "incremental SHA-256 and finalization" in markdown
+    assert str(result.verified_eof_bytes_total) in markdown
 
 
 def test_write_streaming_reports_keeps_installed_foghttp_source_outside_repo_git(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ __all__ = (
     "int_value",
     "ok_total_value",
     "optional_float_field",
+    "reasons_allow_comparison",
     "row_reference",
     "str_field",
     "validity_reason",
@@ -61,6 +62,12 @@ def combined_status(statuses: Iterable[ValidityStatus]) -> ValidityStatus:
         if STATUS_SEVERITY[item] > STATUS_SEVERITY[status]:
             status = item
     return status
+
+
+def reasons_allow_comparison(reasons: Iterable[ValidityReason]) -> bool:
+    return all(
+        reason.status in ("valid", "warning") and reason.code != "expected_compatibility_failure" for reason in reasons
+    )
 
 
 def count_reasons(reasons: list[ValidityReason]) -> dict[str, int]:

@@ -6,20 +6,11 @@ and treats it as an external user-facing dependency.
 
 The goal is not marketing-perfect numbers. The goal is a repeatable, readable
 harness that shows real trade-offs across buffered HTTP workloads, redirects,
-pool contention, delay scenarios, resource usage, and client lifecycle cost.
-For FogHTTP `0.3.x`, the harness also includes a dedicated
-resource/backpressure suite for active request limits, per-origin limits,
-pending queues, pool timeouts, and buffered response body limits, plus a
-one-upstream API client suite for `base_url`, client defaults, params merging,
-prepared requests, and request body encoding. It also includes a request
-builder suite for Python-side `build_request()` and query construction cost,
-and a compressed-response suite for transparent `gzip`, `deflate`, and `br`
-decode overhead. For FogHTTP `0.3.2+`, it includes a response-streaming suite
-for full body consumption, slow body chunks, first-chunk latency, text/line
-iteration, and early-close cleanup.
-For FogHTTP `0.3.4+`, it includes a proxy CONNECT suite for explicit
-`proxy=`, `trust_env=True`, HTTP proxy routing, HTTPS CONNECT setup/reuse, and
-short-lived CONNECT client overhead.
+pool contention, delay scenarios, resource usage, client lifecycle cost,
+compressed response decoding, response streaming, and proxy CONNECT routing.
+Zapros is measured in two forms when supported by a suite: `zapros` uses the
+standard Zapros network handler, while `zapros-pyreqwest` uses
+`zapros[pyreqwest]` and the PyReqwest-backed handler as a separate client row.
 
 ## What It Measures
 
@@ -39,24 +30,30 @@ short-lived CONNECT client overhead.
 ## Install
 
 ```bash
-uv sync
+uv sync --locked
 ```
 
 The project dependency on `foghttp` is resolved from PyPI:
 
 ```toml
-"foghttp>=0.3.5,<0.4"
+"foghttp>=0.4.0,<0.5"
 ```
 
 To benchmark a different released version, change the dependency constraint and
 refresh the lock file. Avoid benchmarking a local editable checkout unless the
 explicit goal is pre-release development analysis.
 
+### Source-pinned streaming research
+
+The opt-in streaming study builds an isolated release wheel from a reviewed
+FogHTTP source revision. See [preparation, profiles and evidence contracts](docs/async-streaming-research.md).
+The ordinary environment above continues to use the locked PyPI dependency.
+
 ## Request Benchmark
 
 ```bash
 uv run foghttp-benchmark \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --requests 500 \
   --warmup 50 \
@@ -71,7 +68,7 @@ uv run foghttp-benchmark \
 ```bash
 uv run foghttp-benchmark \
   --suite client-creation \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --iterations 100 \
   --repeats 3 \
@@ -104,7 +101,7 @@ bursts, `max_response_body_size` cleanup, and
 ```bash
 uv run foghttp-benchmark \
   --suite compressed-response \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --requests 1000 \
   --warmup 100 \
@@ -123,7 +120,7 @@ response decoding against clients that already perform automatic decompression.
 ```bash
 uv run foghttp-benchmark \
   --suite one-upstream \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --requests 1000 \
   --warmup 100 \
@@ -142,7 +139,7 @@ Clients without a semantics-compatible defaults API are reported as skipped.
 ```bash
 uv run foghttp-benchmark \
   --suite request-builder \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --iterations 5000 \
   --warmup 500 \
@@ -160,7 +157,7 @@ a reused client. Unsupported clients are reported as skipped.
 ```bash
 uv run foghttp-benchmark \
   --suite response-streaming \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --requests 200 \
   --warmup 50 \
@@ -176,12 +173,20 @@ lifecycle counters when available. FogHTTP streaming requires PyPI `0.3.2` or
 newer. Local or pre-release runs should still be labeled explicitly through
 report metadata and the output directory.
 
+The opt-in `lifecycle` and `async-bytes` profiles place server and client in
+separate processes and retain independent resource observations, integrity and
+cleanup controls. The latter adds bounded delivery traces, continuous load
+windows and explicit diagnostic profilers. See the
+[streaming research guide](docs/async-streaming-research.md) for limits,
+commands and interpretation. Ordinary streaming still measures a shared
+client/server process and event loop.
+
 ## Proxy CONNECT Benchmark
 
 ```bash
 uv run foghttp-benchmark \
   --suite proxy-connect \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --requests 100 \
   --warmup 20 \
@@ -216,7 +221,7 @@ or runtime state:
 ```bash
 uv run foghttp-benchmark \
   --suite proxy-connect \
-  --clients foghttp,httpx,httpxyz,aiohttp,zapros \
+  --clients foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest \
   --modes async,sync \
   --output-dir results/proxy-connect-isolated
 ```
@@ -249,21 +254,35 @@ Reports include `metadata.validity` and a Markdown `Run Validity` section. The
 status is one of `valid`, `warning`, `needs-rerun`, or `invalid`:
 
 - `valid`: no detected report-quality issues.
-- `warning`: usable for comparison, but noisy rows need attention.
+- `warning`: detected noise or an expected compatibility limitation; check
+  `can_compare` before using competitive rankings.
 - `needs-rerun`: benchmark numbers are diagnostic only until the run is repeated.
 - `invalid`: proxy routing, child process, or report integrity checks failed.
 
-Validity gates detect unexpected measured/warmup errors, suspicious zero
-success throughput, high variation, failed isolated child processes, proxy
-usage guard failures, and missing proxy counters. Resource/backpressure cases
+Validity gates detect unexpected measured errors, reported warmup errors,
+suspicious zero success throughput, high variation, failed isolated child
+processes, proxy usage guard failures, and missing proxy counters.
+Request-builder reports currently omit warmup failures; their comparison
+cannot certify a clean warmup. Retain that limitation when interpreting them. Resource/backpressure cases
 with intentionally induced `PoolTimeout`, response body limit, or aggregate
 buffered budget errors are treated as expected pressure scenarios; recovery
 failures still mark the run as `needs-rerun`.
 
-Compare reports surface input validity. If either input is `needs-rerun` or
-`invalid`, competitive rankings are blocked and the comparison is diagnostic
-only. Historical monolithic all-client proxy-connect runs from 2026-06-07 are
-diagnostic artifacts, not performance baselines.
+Compatibility exceptions retain their exact client, mode, scenario, and phase
+scope. The known sync warmup `RuntimeError` exception does not apply to measured
+errors. Measured `RuntimeError`, unknown errors, mixed expected/unexpected
+errors, and fully failed rows block performance comparison.
+
+Compare reports surface input validity and honor `can_compare`. An expected
+compatibility limitation adds a `warning` reason but blocks competitive rankings
+for the report until comparable and compatibility rows are separated in
+TASK-034. A high-variation warning alone remains comparable. If either input is
+`needs-rerun` or `invalid`, the comparison is diagnostic only. Zero success
+throughput still requires a rerun, including known compatibility failures.
+Loading an older report rechecks its rows and preserves any stronger recorded
+failure; saved validity metadata cannot bypass the current gates. Historical
+monolithic all-client proxy-connect runs from 2026-06-07 are diagnostic artifacts,
+not performance baselines.
 
 ## Compare Reports
 
@@ -297,6 +316,9 @@ only for long-running stages.
 ## Methodology
 
 - Benchmarks use a local asyncio HTTP/1.1 loopback server.
+- Ordinary HTTP suites colocate server, client and harness in one child
+  process; async server/client work shares its event loop. CPU and RSS describe
+  that combined system. Separate-PID streaming profiles are opt-in.
 - Scenarios are shuffled by default with a stable seed.
 - Sync and async results should be compared separately.
 - In request reports, `limit` means the configured benchmark pressure limit.
@@ -312,13 +334,26 @@ only for long-running stages.
 ## Development
 
 ```bash
-uv sync --extra dev
-uv run python -m py_compile foghttp_benchmark/*.py foghttp_benchmark/clients/*.py foghttp_benchmark/creation/*.py
-uv run --extra dev ruff format .
-uv run --extra dev ruff check .
-uv run --extra dev mypy
-pre-commit run --all-files
+uv sync --locked --extra dev
+uv run --locked --extra dev python -m py_compile foghttp_benchmark/*.py foghttp_benchmark/clients/*.py foghttp_benchmark/creation/*.py
+uv run --locked --extra dev pytest -q
+uv run --locked --extra dev ruff format --check .
+uv run --locked --extra dev ruff check .
+uv run --locked --extra dev mypy
+uv run --locked --extra dev pre-commit run --all-files
 ```
+
+Ruff, uv and mypy use their provided pre-commit hooks. The lock hook checks
+consistency without updating the lock file; update dependencies explicitly
+and review the resulting diff. Formatting and lint hooks retain their
+automatic fixes, so review any files they modify. The isolated mypy hook checks
+the whole package with strict project settings. It uses
+`--python-executable=.venv/bin/python` to find dependency types in the project
+environment, without a duplicate dependency list or automatic type-stub
+installation. Run `uv sync --locked --extra dev` before the hooks and again
+after changing `pyproject.toml` or `uv.lock`: the hook does not install or
+synchronize project dependencies. A missing interpreter fails the check;
+an outdated environment may expose outdated APIs.
 
 Keep benchmark code decomposed. If a scenario grows into a subsystem, split it
 into modules before it becomes difficult to review.

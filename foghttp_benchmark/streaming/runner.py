@@ -134,8 +134,8 @@ async def run_streaming_case(
             stage_name=f"Warmup streaming load: {label}",
             mode=spec.mode,
         )
-        started = time.perf_counter()
         async with ResourceSampler() as sampler:
+            started = time.perf_counter()
             load_result = await run_load_with_progress(
                 client,
                 case,
@@ -147,7 +147,7 @@ async def run_streaming_case(
                 stage_name=f"Measured streaming load: {label}",
                 mode=spec.mode,
             )
-        duration = time.perf_counter() - started
+            duration = time.perf_counter() - started
         client_stats = client.stats()
     finally:
         close_result = client.close()
@@ -172,7 +172,7 @@ async def run_streaming_case(
         ok_streams_per_second=ok_streams / duration if duration > 0 else 0.0,
         ok_streams=ok_streams,
         bytes_read_total=load_result.bytes_read,
-        mb_per_second=(load_result.bytes_read / BYTES_PER_MIB) / duration if duration > 0 else 0.0,
+        mb_per_second=(load_result.verified_eof_bytes / BYTES_PER_MIB) / duration if duration > 0 else 0.0,
         chunks_read_total=load_result.chunks_read,
         text_chars_read_total=load_result.text_chars_read,
         lines_read_total=load_result.lines_read,
@@ -190,6 +190,8 @@ async def run_streaming_case(
         peak_threads=sampler.peak_threads,
         peak_fds=sampler.peak_fds,
         client_stats=client_stats,
+        verified_eof_bytes_total=load_result.verified_eof_bytes,
+        verified_eof_chunks_total=load_result.verified_eof_chunks,
     )
 
 
@@ -284,6 +286,8 @@ async def run_async_streaming_load(
         chunks_read = 0
         text_chars_read = 0
         lines_read = 0
+        verified_eof_bytes = 0
+        verified_eof_chunks = 0
         error_types: dict[str, int] = {}
         while True:
             try:
@@ -298,13 +302,18 @@ async def run_async_streaming_load(
                     lines_read,
                     sum(error_types.values()),
                     error_types,
+                    verified_eof_bytes,
+                    verified_eof_chunks,
                 )
 
             started_ns = time.perf_counter_ns()
             try:
                 outcome = await client.stream(case, url)
-                if not outcome_matches(case, outcome):
+                matches = outcome_matches(case, outcome)
+                if not matches:
                     increment(error_types, "check_failed")
+                verified_eof_bytes += outcome.bytes_read if matches and case.consume == "all" else 0
+                verified_eof_chunks += outcome.chunks_read if matches and case.consume == "all" else 0
                 bytes_read += outcome.bytes_read
                 chunks_read += outcome.chunks_read
                 text_chars_read += outcome.text_chars_read
@@ -347,6 +356,8 @@ def run_sync_streaming_load(
         chunks_read = 0
         text_chars_read = 0
         lines_read = 0
+        verified_eof_bytes = 0
+        verified_eof_chunks = 0
         error_types: dict[str, int] = {}
         while True:
             try:
@@ -361,13 +372,18 @@ def run_sync_streaming_load(
                     lines_read,
                     sum(error_types.values()),
                     error_types,
+                    verified_eof_bytes,
+                    verified_eof_chunks,
                 )
 
             started_ns = time.perf_counter_ns()
             try:
                 outcome = client.stream(case, url)
-                if not outcome_matches(case, outcome):
+                matches = outcome_matches(case, outcome)
+                if not matches:
                     increment(error_types, "check_failed")
+                verified_eof_bytes += outcome.bytes_read if matches and case.consume == "all" else 0
+                verified_eof_chunks += outcome.chunks_read if matches and case.consume == "all" else 0
                 bytes_read += outcome.bytes_read
                 chunks_read += outcome.chunks_read
                 text_chars_read += outcome.text_chars_read
@@ -397,6 +413,12 @@ def outcome_matches(case: StreamingCase, outcome: StreamingOutcome) -> bool:
         return _line_outcome_matches(case, outcome)
     if case.consume == "first-chunk":
         return outcome.bytes_read <= case.size_bytes
+    if (
+        case.read == "bytes"
+        and case.expected_sha256 is not None
+        and (not outcome.eof_received or outcome.body_sha256 != case.expected_sha256)
+    ):
+        return False
     return outcome.bytes_read == case.size_bytes
 
 
@@ -417,6 +439,8 @@ def merge_streaming_results(results: list[StreamingLoadResult]) -> StreamingLoad
     chunks_read = 0
     text_chars_read = 0
     lines_read = 0
+    verified_eof_bytes = 0
+    verified_eof_chunks = 0
     error_types: dict[str, int] = {}
     for result in results:
         latencies_ms.extend(result.latencies_ms)
@@ -425,6 +449,8 @@ def merge_streaming_results(results: list[StreamingLoadResult]) -> StreamingLoad
         chunks_read += result.chunks_read
         text_chars_read += result.text_chars_read
         lines_read += result.lines_read
+        verified_eof_bytes += result.verified_eof_bytes
+        verified_eof_chunks += result.verified_eof_chunks
         for key, count in result.error_types.items():
             error_types[key] = error_types.get(key, 0) + count
     return StreamingLoadResult(
@@ -436,6 +462,8 @@ def merge_streaming_results(results: list[StreamingLoadResult]) -> StreamingLoad
         lines_read,
         sum(error_types.values()),
         error_types,
+        verified_eof_bytes,
+        verified_eof_chunks,
     )
 
 

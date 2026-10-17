@@ -185,9 +185,7 @@ def write_proxy_connect_reports(
             "suite": PROXY_CONNECT_SUITE,
             "args": vars(args),
             "proxy_url": redacted_proxy,
-            "package_versions": package_versions(
-                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "jinja2", "psutil", "rich", "typer"],
-            ),
+            "package_versions": package_versions(),
             "skipped": skipped,
         },
         aggregate_rows,

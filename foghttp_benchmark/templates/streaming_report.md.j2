@@ -12,6 +12,11 @@
 - Python: `{{ python_version }}`
 - Platform: `{{ platform_name }}`
 - Server: `local asyncio HTTP/1.1 loopback server`
+- Measurement scope: `shared-client-server-process-v1`; resource peaks include the local server and harness and are incomparable with separate-PID client resources.
+- Metric schema: `2`; EOF throughput scope `verified-eof-v2`, timing scope `load-only-v2`.
+- Duration covers load, consumer counting, incremental SHA-256 and finalization for full bytes streams, and response-context exit. Sampler setup/teardown, client close and reporting are excluded.
+- Built-in full bytes cases use deterministic `byte-pattern-0-255-v1` content and require matching status, size, EOF and SHA-256. Text/lines retain their size/line checks.
+- Observed totals include completed invalid outcomes; a raised client exception can hide partial bytes from this legacy adapter API. Failed and expected early-close responses contribute zero verified EOF bytes and zero EOF MiB/s.
 - Streams/run: `{{ args.requests }}`
 - Warmup/run: `{{ args.warmup }}`
 - Repeats: `{{ args.repeats }}`
@@ -29,8 +34,16 @@
 
 ## Aggregate
 
-| mode | client | case | read | consume | conc | streams/s median | MiB/s median | lines/s median | cv % | p50 ms | p95 ms | p99 ms | first item p95 ms | errors % | max RSS MB | max threads | max fds | body closed | body reuse | body aborted | conn opened | conn reused | conn closed | conn aborted | idle conn | error types |
-| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| mode | client | case | read | consume | conc | streams/s median | verified EOF MiB/s median | lines/s median | cv % | p50 ms | p95 ms | p99 ms | first item p95 ms | errors % | max RSS MB | max threads | max fds | body closed | body reuse | body aborted | conn opened | conn reused | conn closed | conn aborted | idle conn | error types | warmup error types |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
 {% for row in aggregate %}
-| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.read }} | {{ row.consume }} | {{ row.concurrency }} | {{ value(row.ok_streams_s_median, 1) }} | {{ value(row.mb_s_median, 1) }} | {{ value(row.lines_s_median, 1) }} | {{ value(row.streams_s_cv_percent, 1) }} | {{ value(row.p50_ms_median, 2) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ value(row.first_chunk_p95_ms_median, 2) }} | {{ value(row.error_rate_percent, 2) }} | {{ value(row.rss_mb_max, 1) }} | {{ row.threads_max }} | {{ row.fds_max }} | {{ row.final_response_body_closed_max if row.final_response_body_closed_max is not none else "-" }} | {{ row.final_response_body_reuse_eligible_max if row.final_response_body_reuse_eligible_max is not none else "-" }} | {{ row.final_response_body_aborted_max if row.final_response_body_aborted_max is not none else "-" }} | {{ row.final_connections_opened_max if row.final_connections_opened_max is not none else "-" }} | {{ row.final_connections_reused_max if row.final_connections_reused_max is not none else "-" }} | {{ row.final_connections_closed_max if row.final_connections_closed_max is not none else "-" }} | {{ row.final_connections_aborted_max if row.final_connections_aborted_max is not none else "-" }} | {{ row.final_idle_connections_max if row.final_idle_connections_max is not none else "-" }} | `{{ row.error_types }}` |
+| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.read }} | {{ row.consume }} | {{ row.concurrency }} | {{ value(row.ok_streams_s_median, 1) }} | {{ value(row.mb_s_median, 1) }} | {{ value(row.lines_s_median, 1) }} | {{ value(row.streams_s_cv_percent, 1) }} | {{ value(row.p50_ms_median, 2) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ value(row.first_chunk_p95_ms_median, 2) }} | {{ value(row.error_rate_percent, 2) }} | {{ value(row.rss_mb_max, 1) }} | {{ row.threads_max }} | {{ row.fds_max }} | {{ row.final_response_body_closed_max if row.final_response_body_closed_max is not none else "-" }} | {{ row.final_response_body_reuse_eligible_max if row.final_response_body_reuse_eligible_max is not none else "-" }} | {{ row.final_response_body_aborted_max if row.final_response_body_aborted_max is not none else "-" }} | {{ row.final_connections_opened_max if row.final_connections_opened_max is not none else "-" }} | {{ row.final_connections_reused_max if row.final_connections_reused_max is not none else "-" }} | {{ row.final_connections_closed_max if row.final_connections_closed_max is not none else "-" }} | {{ row.final_connections_aborted_max if row.final_connections_aborted_max is not none else "-" }} | {{ row.final_idle_connections_max if row.final_idle_connections_max is not none else "-" }} | `{{ row.error_types }}` | `{{ row.warmup_error_types }}` |
+{% endfor %}
+
+## Observed and verified EOF totals
+
+| mode | client | case | conc | observed bytes | observed items | verified EOF bytes | verified EOF items | throughput scope | timing scope |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+{% for row in aggregate %}
+| {{ row.mode }} | {{ row.client }} | {{ row.case }} | {{ row.concurrency }} | {{ row.bytes_read_total }} | {{ row.chunks_read_total }} | {{ row.verified_eof_bytes_total }} | {{ row.verified_eof_chunks_total }} | `{{ row.throughput_scope }}` | `{{ row.timing_scope }}` |
 {% endfor %}

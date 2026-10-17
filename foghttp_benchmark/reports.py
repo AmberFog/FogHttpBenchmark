@@ -22,6 +22,19 @@ from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+REPORT_PACKAGES = (
+    "foghttp",
+    "httpx",
+    "httpxyz",
+    "aiohttp",
+    "zapros",
+    "pyreqwest",
+    "faker",
+    "jinja2",
+    "psutil",
+    "rich",
+    "typer",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,9 +141,7 @@ def write_reports(
             "server": "local asyncio HTTP/1.1 loopback server",
             "suite": args.suite,
             "args": vars(args),
-            "package_versions": package_versions(
-                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
-            ),
+            "package_versions": package_versions(),
             "run_settling": {
                 "cooldown_s": actual_settling_config.cooldown_s,
                 "opened_connection_threshold": actual_settling_config.opened_connection_threshold,
@@ -194,7 +205,7 @@ def markdown_table_cell(value: object) -> str:
     return text.replace("|", r"\|").replace("\n", "<br>")
 
 
-def package_versions(names: list[str]) -> dict[str, str]:
+def package_versions(names: Iterable[str] = REPORT_PACKAGES) -> dict[str, str]:
     versions: dict[str, str] = {}
     for name in names:
         versions[name] = package_version(name)
