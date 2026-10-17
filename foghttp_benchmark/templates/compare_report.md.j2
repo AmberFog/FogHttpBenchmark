@@ -22,13 +22,14 @@
 - New timestamp: `{{ comparison.metadata.new_timestamp }}`
 - Old {{ comparison.metadata.focus_client }}: `{{ comparison.metadata.old_focus_version }}`
 - New {{ comparison.metadata.focus_client }}: `{{ comparison.metadata.new_focus_version }}`
+- Explicit comparison axis: `{{ comparison.metadata.comparison_axis or "none" }}`
 - Old validity: `{{ comparison.validity.old_status }}` (`{{ comparison.validity.old_reason_count }}` reasons)
 - New validity: `{{ comparison.validity.new_status }}` (`{{ comparison.validity.new_reason_count }}` reasons)
 
 {% if comparison.validity.blocks_strong_conclusions %}
 ## Validity Warning
 
-At least one input report is `needs-rerun` or `invalid`. Strong performance conclusions and competitive rankings are blocked for this comparison; tables below are diagnostic only.
+At least one input report does not permit performance comparison. Strong performance conclusions and competitive rankings are blocked for this comparison; tables below are diagnostic only.
 
 {% if comparison.validity.old_reasons %}
 Old report reasons:
@@ -104,6 +105,13 @@ No error rows.
 {% endif %}
 
 ## Resource Summary
+
+- Old measurement scope: `{{ comparison.resource_summary.old_measurement_scope }}`
+- New measurement scope: `{{ comparison.resource_summary.new_measurement_scope }}`
+{% if not comparison.resource_summary.comparable %}
+
+**Resource metrics incomparable:** {{ comparison.resource_summary.incomparable_reason }}
+{% endif %}
 
 | metric | old | new |
 | --- | ---: | ---: |

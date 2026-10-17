@@ -135,6 +135,7 @@ class OneUpstreamAggregateRow:
     ok_requests_total: int
     errors_total: int
     warmup_errors_total: int
+    warmup_error_types: dict[str, int]
     error_rate_percent: float
     ok_req_s_median: float
     req_s_median: float

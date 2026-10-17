@@ -20,6 +20,7 @@ def build_comparison(
     *,
     focus_client: str,
     top_n: int,
+    comparison_axis: str | None = None,
 ) -> ComparisonResult:
     old_report = load_benchmark_report(old_path)
     new_report = load_benchmark_report(new_path)
@@ -28,6 +29,7 @@ def build_comparison(
         new_report,
         focus_client=focus_client,
         top_n=top_n,
+        comparison_axis=comparison_axis,
     )
 
 

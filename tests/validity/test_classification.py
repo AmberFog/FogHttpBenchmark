@@ -1,4 +1,10 @@
-from foghttp_benchmark.constants import PROXY_CONNECT_SUITE, REQUESTS_SUITE, RESOURCE_BACKPRESSURE_SUITE
+from foghttp_benchmark.constants import (
+    COMPRESSED_RESPONSE_SUITE,
+    PROXY_CONNECT_SUITE,
+    REQUESTS_SUITE,
+    RESOURCE_BACKPRESSURE_SUITE,
+    RESPONSE_STREAMING_SUITE,
+)
 from foghttp_benchmark.models import JsonObject
 from foghttp_benchmark.validity import classify_report_validity
 
@@ -147,6 +153,121 @@ def test_unexpected_errors_and_zero_success_throughput_need_rerun() -> None:
         "unexpected_warmup_errors",
         "zero_success_throughput",
     }
+
+
+def test_failed_compressed_compatibility_row_cannot_be_compared() -> None:
+    summary = classify_report_validity(
+        suite=COMPRESSED_RESPONSE_SUITE,
+        aggregate_rows=[
+            {
+                "mode": "async",
+                "client": "aiohttp",
+                "scenario": "multi-gzip-deflate-64k",
+                "concurrency": 10,
+                "request_limit": 10,
+                "ok_req_s_median": 0.0,
+                "ok_requests_total": 0,
+                "errors_total": 100,
+                "warmup_errors_total": 10,
+                "error_types": {"check_failed": 100},
+                "warmup_error_types": {"check_failed": 10},
+            },
+        ],
+        metadata={},
+    )
+
+    assert summary.status == "needs-rerun"
+    assert not summary.can_compare
+    assert {reason.code for reason in summary.reasons} == {
+        "expected_compatibility_failure",
+        "zero_success_throughput",
+    }
+
+
+def test_failed_streaming_compatibility_row_cannot_be_compared() -> None:
+    summary = classify_report_validity(
+        suite=RESPONSE_STREAMING_SUITE,
+        aggregate_rows=[
+            {
+                "mode": "async",
+                "client": "aiohttp",
+                "case": "long-line-1m",
+                "read": "lines",
+                "consume": "all",
+                "concurrency": 10,
+                "request_limit": 10,
+                "ok_streams_s_median": 0.0,
+                "ok_streams_total": 0,
+                "errors_total": 100,
+                "warmup_errors_total": 10,
+                "error_types": {"LineTooLong": 100},
+                "warmup_error_types": {"LineTooLong": 10},
+            },
+        ],
+        metadata={},
+    )
+
+    assert summary.status == "needs-rerun"
+    assert not summary.can_compare
+    assert {reason.code for reason in summary.reasons} == {
+        "expected_compatibility_failure",
+        "zero_success_throughput",
+    }
+
+
+def test_unknown_foghttp_error_still_needs_rerun() -> None:
+    summary = classify_report_validity(
+        suite=REQUESTS_SUITE,
+        aggregate_rows=[
+            {
+                "mode": "async",
+                "client": "foghttp",
+                "scenario": "post-json-echo",
+                "concurrency": 10,
+                "request_limit": 10,
+                "ok_req_s_median": 0.0,
+                "ok_requests_total": 0,
+                "errors_total": 100,
+                "warmup_errors_total": 10,
+                "error_types": {"NetworkError": 100},
+                "warmup_error_types": {"NetworkError": 10},
+            },
+        ],
+        metadata={},
+    )
+
+    assert summary.status == "needs-rerun"
+    assert {reason.code for reason in summary.reasons} == {
+        "unexpected_measured_errors",
+        "unexpected_warmup_errors",
+        "zero_success_throughput",
+    }
+
+
+def test_expected_warmup_error_is_diagnostic_only() -> None:
+    summary = classify_report_validity(
+        suite=REQUESTS_SUITE,
+        aggregate_rows=[
+            {
+                "mode": "sync",
+                "client": "zapros-pyreqwest",
+                "scenario": "json-small",
+                "concurrency": 10,
+                "request_limit": 10,
+                "ok_req_s_median": 100.0,
+                "ok_requests_total": 100,
+                "errors_total": 0,
+                "warmup_errors_total": 5,
+                "error_types": {},
+                "warmup_error_types": {"RuntimeError": 5},
+            },
+        ],
+        metadata={},
+    )
+
+    assert summary.status == "warning"
+    assert not summary.can_compare
+    assert [reason.code for reason in summary.reasons] == ["expected_compatibility_failure"]
 
 
 def test_high_variation_is_warning_only() -> None:

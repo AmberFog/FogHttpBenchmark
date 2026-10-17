@@ -1,6 +1,10 @@
 __all__ = ("error_reasons", "variation_reasons", "zero_primary_metric_reasons")
 
 from foghttp_benchmark.models import JsonObject
+from foghttp_benchmark.validity.compatibility import (
+    compatibility_expected_error_count,
+    compatibility_failure_reasons,
+)
 from foghttp_benchmark.validity.helpers import (
     CV_FIELDS,
     HIGH_CV_WARNING_PERCENT,
@@ -21,6 +25,8 @@ def error_reasons(suite: str, row: JsonObject) -> list[ValidityReason]:
     errors_total = int_field(row, "errors_total")
     warmup_errors_total = int_field(row, "warmup_errors_total")
     unexpected_errors = unexpected_error_count(suite, row, errors_total)
+    if unexpected_errors > 0:
+        unexpected_errors = max(0, unexpected_errors - compatibility_expected_error_count(suite, row, "error_types"))
     if unexpected_errors > 0 and not has_proxy_bypass_errors(row):
         reasons.append(
             validity_reason(
@@ -30,15 +36,27 @@ def error_reasons(suite: str, row: JsonObject) -> list[ValidityReason]:
                 row=row_reference(row),
             ),
         )
-    if warmup_errors_total > 0 and not resource_expected_pressure_row(suite, row):
+    unexpected_warmup_errors = unexpected_error_count(
+        suite,
+        row,
+        warmup_errors_total,
+        error_field="warmup_error_types",
+    )
+    if unexpected_warmup_errors > 0:
+        unexpected_warmup_errors = max(
+            0,
+            unexpected_warmup_errors - compatibility_expected_error_count(suite, row, "warmup_error_types"),
+        )
+    if unexpected_warmup_errors > 0:
         reasons.append(
             validity_reason(
                 status="needs-rerun",
                 code="unexpected_warmup_errors",
-                message=f"Warmup recorded {warmup_errors_total} unexpected errors.",
+                message=f"Warmup recorded {unexpected_warmup_errors} unexpected errors.",
                 row=row_reference(row),
             ),
         )
+    reasons.extend(compatibility_failure_reasons(suite, row))
     return reasons
 
 

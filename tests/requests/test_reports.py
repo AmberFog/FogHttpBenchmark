@@ -1,32 +1,27 @@
-from dataclasses import asdict
+from dataclasses import asdict, replace
+import json
+from pathlib import Path
 
-from foghttp_benchmark.models import RunResult
-from foghttp_benchmark.reports import aggregate_results
+import pytest
+
+from foghttp_benchmark.constants import (
+    BENCHMARK_SEED,
+    COMPRESSED_RESPONSE_SUITE,
+    DEFAULT_CLIENT_COUNTS,
+    DEFAULT_CREATION_ITERATIONS,
+    DEFAULT_MAX_REDIRECTS,
+    REQUESTS_SUITE,
+)
+from foghttp_benchmark.models import BenchmarkArgs, RunResult
+from foghttp_benchmark.reports import aggregate_results, write_reports
 
 
 EXPECTED_ERRORS_TOTAL = 7
 EXPECTED_WARMUP_ERRORS_TOTAL = 3
 
 
-def test_request_aggregate_preserves_error_type_totals() -> None:
-    rows = aggregate_results(
-        [
-            run_result(
-                repeat=0,
-                errors=3,
-                warmup_errors=1,
-                error_types={"RequestError": 2, "check_failed": 1},
-                warmup_error_types={"RequestError": 1},
-            ),
-            run_result(
-                repeat=1,
-                errors=4,
-                warmup_errors=2,
-                error_types={"RequestError": 3, "TimeoutError": 1},
-                warmup_error_types={"TimeoutError": 2},
-            ),
-        ],
-    )
+def test_request_aggregate_preserves_error_type_totals(error_results: list[RunResult]) -> None:
+    rows = aggregate_results(error_results)
 
     assert len(rows) == 1
     payload = asdict(rows[0])
@@ -43,39 +38,45 @@ def test_request_aggregate_preserves_error_type_totals() -> None:
     }
 
 
-def run_result(
-    *,
-    repeat: int,
-    errors: int,
-    warmup_errors: int,
-    error_types: dict[str, int],
-    warmup_error_types: dict[str, int],
-) -> RunResult:
-    return RunResult(
-        client="foghttp",
-        mode="async",
-        scenario="post-echo-64k",
-        concurrency=10,
-        request_limit=10,
+@pytest.mark.parametrize(
+    ("suite", "scenario"),
+    [(REQUESTS_SUITE, "post-echo-64k"), (COMPRESSED_RESPONSE_SUITE, "gzip-64k")],
+)
+def test_request_report_serializes_measured_and_warmup_error_types(
+    tmp_path: Path,
+    suite: str,
+    scenario: str,
+    error_results: list[RunResult],
+) -> None:
+    results = [replace(result, scenario=scenario) for result in error_results]
+    args = BenchmarkArgs(
+        suite=suite,
+        clients="foghttp",
+        modes="async",
+        concurrency="10",
         requests=100,
-        repeat=repeat,
-        duration_s=1.0,
-        requests_per_second=100.0,
-        ok_requests_per_second=95.0,
-        ok_requests=100 - errors,
-        p50_ms=1.0,
-        p90_ms=2.0,
-        p95_ms=3.0,
-        p99_ms=4.0,
-        min_ms=0.5,
-        max_ms=5.0,
-        errors=errors,
-        warmup_errors=warmup_errors,
-        error_types=error_types,
-        warmup_error_types=warmup_error_types,
-        process_cpu_s=0.5,
-        peak_rss_mb=64.0,
-        peak_threads=4,
-        peak_fds=8,
-        client_stats=None,
+        warmup=10,
+        repeats=2,
+        max_redirects=DEFAULT_MAX_REDIRECTS,
+        seed=BENCHMARK_SEED,
+        no_shuffle=False,
+        output_dir=str(tmp_path),
+        scenarios=scenario,
+        iterations=DEFAULT_CREATION_ITERATIONS,
+        client_counts=DEFAULT_CLIENT_COUNTS,
     )
+
+    write_reports(results, {}, args)
+
+    payload = json.loads((tmp_path / "latest.json").read_text())
+    assert payload["metadata"]["suite"] == suite
+    row = payload["aggregate"][0]
+    assert row["errors_total"] == EXPECTED_ERRORS_TOTAL
+    assert row["warmup_errors_total"] == EXPECTED_WARMUP_ERRORS_TOTAL
+    assert row["error_types"] == {"RequestError": 5, "TimeoutError": 1, "check_failed": 1}
+    assert row["warmup_error_types"] == {"RequestError": 1, "TimeoutError": 2}
+    assert payload["runs"] == [asdict(result) for result in results]
+    markdown = (tmp_path / "latest.md").read_text()
+    assert "warmup error types" in markdown
+    assert "'check_failed': 1" in markdown
+    assert "'TimeoutError': 2" in markdown

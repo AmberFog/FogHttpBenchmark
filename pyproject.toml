@@ -18,22 +18,22 @@ dependencies = [
     "aiohttp>=3.12,<4",
     "brotli>=1.1,<2",
     "faker>=33",
-    "foghttp>=0.3.5,<0.4",
+    "foghttp>=0.4.0,<0.5",
     "httpx>=0.28,<1",
     "httpxyz>=0.31,<1",
     "jinja2>=3.1,<4",
     "psutil>=6,<8",
     "rich>=15,<16",
     "typer>=0.16,<1",
-    "zapros>=0.11,<1",
+    "zapros[pyreqwest]>=0.11,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "mypy>=1.20,<2",
+    "mypy>=2.4,<3",
     "pre-commit>=4,<5",
     "pytest>=8,<10",
-    "ruff>=0.15,<1",
+    "ruff>=0.17.1,<1",
 ]
 
 [project.scripts]
@@ -42,9 +42,19 @@ foghttp-benchmark = "foghttp_benchmark.cli:app"
 [tool.uv]
 package = true
 
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+
 [tool.setuptools.packages.find]
 include = [
     "foghttp_benchmark*",
+]
+
+[tool.setuptools.package-data]
+foghttp_benchmark = [
+    "templates/*.j2",
 ]
 
 [tool.mypy]
@@ -58,3 +68,6 @@ warn_unused_configs = true
 pretty = true
 show_error_codes = true
 namespace_packages = false
+
+[tool.typos.default.extend-identifiers]
+CPY001 = "CPY001"

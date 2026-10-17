@@ -46,7 +46,7 @@ RESULTS_DIR = ROOT / "results"
 ASYNC_MODE = "async"
 SYNC_MODE = "sync"
 
-DEFAULT_CLIENTS = "foghttp,httpx,httpxyz,aiohttp,zapros"
+DEFAULT_CLIENTS = "foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest"
 DEFAULT_MODES = ASYNC_MODE
 DEFAULT_CONCURRENCY = "1,10,50,100"
 DEFAULT_REQUESTS = 2000

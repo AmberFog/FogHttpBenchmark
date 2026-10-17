@@ -7,7 +7,13 @@ from foghttp_benchmark.clients.foghttp_client import make_foghttp_async, make_fo
 from foghttp_benchmark.clients.httpx_client import make_httpx_async, make_httpx_sync
 from foghttp_benchmark.clients.httpxyz_client import make_httpxyz_async, make_httpxyz_sync
 from foghttp_benchmark.clients.httpxyz_import import import_httpxyz
-from foghttp_benchmark.clients.zapros_client import make_zapros_async, make_zapros_sync
+from foghttp_benchmark.clients.zapros_client import (
+    ZAPROS_PYREQWEST_CLIENT,
+    make_zapros_async,
+    make_zapros_pyreqwest_async,
+    make_zapros_pyreqwest_sync,
+    make_zapros_sync,
+)
 from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.models import ClientFactory, ClientSpec
 
@@ -23,12 +29,14 @@ def available_clients(
             "httpxyz": make_httpxyz_async,
             "aiohttp": make_aiohttp_async,
             "zapros": make_zapros_async,
+            ZAPROS_PYREQWEST_CLIENT: make_zapros_pyreqwest_async,
         },
         SYNC_MODE: {
             "foghttp": make_foghttp_sync,
             "httpx": make_httpx_sync,
             "httpxyz": make_httpxyz_sync,
             "zapros": make_zapros_sync,
+            ZAPROS_PYREQWEST_CLIENT: make_zapros_pyreqwest_sync,
         },
     }
     clients: list[ClientSpec] = []
@@ -55,8 +63,12 @@ def available_clients(
 def import_client_module(name: str) -> object:
     if name == "httpxyz":
         return import_httpxyz()
+    if name == ZAPROS_PYREQWEST_CLIENT:
+        importlib.import_module("pyreqwest.client")
     return importlib.import_module(client_module_name(name))
 
 
 def client_module_name(name: str) -> str:
+    if name == ZAPROS_PYREQWEST_CLIENT:
+        return "zapros"
     return "foghttp" if name == "foghttp" else name

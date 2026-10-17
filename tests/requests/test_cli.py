@@ -13,11 +13,13 @@ from foghttp_benchmark.models import BenchmarkArgs, ClientSpec, RunResult, Scena
 def test_request_suite_settles_after_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     scenario = Scenario(name="json-small", method="GET", path="/json-small")
     spec = ClientSpec(name="foghttp", mode="async", factory=lambda _config: raise_unexpected_factory_call())
+    server_calls: list[None] = []
     settling_calls: list[dict[str, int] | None] = []
     reported_config: list[object] = []
 
     @asynccontextmanager
     async def fake_benchmark_server() -> AsyncIterator[str]:
+        server_calls.append(None)
         yield "http://127.0.0.1:1"
 
     async def fake_run_once(**_kwargs: object) -> RunResult:
@@ -45,6 +47,7 @@ def test_request_suite_settles_after_run(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     cli.asyncio.run(cli.run_request_suite(args, [spec], {}, progress=None))
 
+    assert server_calls == [None]
     assert settling_calls == [{"connections_opened": 300}]
     assert len(reported_config) == 1
 

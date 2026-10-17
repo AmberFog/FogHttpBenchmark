@@ -166,8 +166,8 @@ async def run_resource_case(
             scenario,
             url,
             secondary_url,
-            concurrency,
-            warmup,
+            concurrency=concurrency,
+            requests=warmup,
             collect=False,
             progress=progress,
             stage_name=f"Warmup resource load: {label}",
@@ -179,8 +179,8 @@ async def run_resource_case(
                 scenario,
                 url,
                 secondary_url,
-                concurrency,
-                requests,
+                concurrency=concurrency,
+                requests=requests,
                 collect=True,
                 progress=progress,
                 stage_name=f"Measured resource load: {label}",
@@ -270,14 +270,22 @@ async def run_case_load(
     scenario: Scenario,
     url: str,
     secondary_url: str | None,
+    *,
     concurrency: int,
     requests: int,
-    *,
     collect: bool,
     progress: ProgressStep | None = None,
 ) -> LoadResult:
     if secondary_url is None:
-        return await run_load(client, scenario, url, concurrency, requests, collect=collect, progress=progress)
+        return await run_load(
+            client,
+            scenario,
+            url,
+            concurrency=concurrency,
+            requests=requests,
+            collect=collect,
+            progress=progress,
+        )
     if requests == 0:
         return LoadResult([], 0, {})
     if isinstance(client, AsyncClientAdapter):
@@ -286,8 +294,8 @@ async def run_case_load(
             scenario,
             url,
             secondary_url,
-            concurrency,
-            requests,
+            concurrency=concurrency,
+            requests=requests,
             collect=collect,
             progress=progress,
         )
@@ -297,8 +305,8 @@ async def run_case_load(
         scenario,
         url,
         secondary_url,
-        concurrency,
-        requests,
+        concurrency=concurrency,
+        requests=requests,
         collect=collect,
         progress=progress,
     )
@@ -309,9 +317,9 @@ async def run_case_load_with_progress(
     scenario: Scenario,
     url: str,
     secondary_url: str | None,
+    *,
     concurrency: int,
     requests: int,
-    *,
     collect: bool,
     progress: ProgressReporter | None,
     stage_name: str,
@@ -322,8 +330,8 @@ async def run_case_load_with_progress(
             scenario,
             url,
             secondary_url,
-            concurrency,
-            requests,
+            concurrency=concurrency,
+            requests=requests,
             collect=collect,
         )
     with progress_stage(
@@ -338,8 +346,8 @@ async def run_case_load_with_progress(
             scenario,
             url,
             secondary_url,
-            concurrency,
-            requests,
+            concurrency=concurrency,
+            requests=requests,
             collect=collect,
             progress=progress_step,
         )
@@ -350,9 +358,9 @@ async def run_async_mixed_origin_load(
     scenario: Scenario,
     url: str,
     secondary_url: str,
+    *,
     concurrency: int,
     requests: int,
-    *,
     collect: bool,
     progress: ProgressStep | None = None,
 ) -> LoadResult:
@@ -395,9 +403,9 @@ def run_sync_mixed_origin_load(
     scenario: Scenario,
     url: str,
     secondary_url: str,
+    *,
     concurrency: int,
     requests: int,
-    *,
     collect: bool,
     progress: ProgressStep | None = None,
 ) -> LoadResult:

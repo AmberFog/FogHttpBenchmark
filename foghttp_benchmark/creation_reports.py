@@ -124,9 +124,7 @@ def write_creation_reports(
             "server": "local asyncio HTTP/1.1 loopback server",
             "suite": args.suite,
             "args": vars(args),
-            "package_versions": package_versions(
-                ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
-            ),
+            "package_versions": package_versions(),
             "skipped": skipped,
         },
         aggregate_rows,

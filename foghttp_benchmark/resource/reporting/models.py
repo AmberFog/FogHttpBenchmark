@@ -36,3 +36,4 @@ class ResourceAggregateRow:
     final_buffered_response_budget_rejections_max: int | None
     recovery_failures: int
     error_types: dict[str, int]
+    warmup_error_types: dict[str, int]

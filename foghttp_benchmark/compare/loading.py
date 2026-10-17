@@ -4,13 +4,20 @@ import json
 from pathlib import Path
 
 from foghttp_benchmark.compare.models import BenchmarkReport, BenchmarkRow, BenchmarkSuite, JsonObject
+from foghttp_benchmark.streaming.attribution_reports import revalidate_attribution_rows
 from foghttp_benchmark.validity.classification import validity_summary_from_metadata
+from foghttp_benchmark.validity.streaming_profiles import uses_streaming_profile
 
 
 def load_benchmark_report(path: Path) -> BenchmarkReport:
     payload = load_json_object(path)
     metadata = object_field(payload, "metadata")
     aggregate_rows = object_list_field(payload, "aggregate")
+    if uses_streaming_profile(metadata, aggregate_rows, "async-bytes"):
+        metadata = {
+            **metadata,
+            "raw_evidence_validation": revalidate_attribution_rows(metadata, aggregate_rows, path.parent),
+        }
     suite = report_suite(metadata, aggregate_rows)
     rows = [benchmark_row(suite, row) for row in aggregate_rows]
     validity = validity_summary_from_metadata(metadata, suite, aggregate_rows)
@@ -265,23 +272,72 @@ def response_streaming_row(row: JsonObject) -> BenchmarkRow:
     consume = str_field(row, "consume")
     concurrency = int_field(row, "concurrency")
     request_limit = int_field(row, "request_limit")
+    lifecycle_identity = (
+        ("lifecycle", json.dumps(row.get("configuration", {}), sort_keys=True))
+        if row.get("profile") == "lifecycle"
+        else ()
+    )
+    attribution_identity = (
+        ("async-bytes", str_field(row, "condition_fingerprint"), str_field(row, "primary_metric"))
+        if row.get("profile") == "async-bytes"
+        else ()
+    )
+    metric_scope = (
+        (str_field(row, "throughput_scope", "legacy-observed-v1"), str_field(row, "timing_scope", "legacy-sampler-v1"))
+        if "throughput_scope" in row or "timing_scope" in row
+        else ()
+    )
+    resources = object_field(object_field(row, "resources"), "client")
+    lifecycle_rss = optional_float_field(resources, "sampled_peak_rss_bytes_max")
+    is_lifecycle = row.get("profile") in {"lifecycle", "async-bytes"}
     return BenchmarkRow(
         suite="response-streaming",
-        identity=(mode, client, case, read, consume, str(concurrency), str(request_limit)),
-        group=(mode, case, read, consume, str(concurrency), str(request_limit)),
+        identity=(
+            mode,
+            client,
+            case,
+            read,
+            consume,
+            str(concurrency),
+            str(request_limit),
+            *lifecycle_identity,
+            *attribution_identity,
+            *metric_scope,
+        ),
+        group=(
+            mode,
+            case,
+            read,
+            consume,
+            str(concurrency),
+            str(request_limit),
+            *lifecycle_identity,
+            *attribution_identity,
+            *metric_scope,
+        ),
         label=f"{mode} / {client} / {case} / {read} / {consume} / conc={concurrency} / limit={request_limit}",
         mode=mode,
         client=client,
         scenario=case,
-        primary_value=float_field(row, "ok_streams_s_median"),
+        primary_value=optional_float_field(row, "verified_bytes_s_median")
+        if row.get("profile") == "async-bytes"
+        else float_field(row, "ok_streams_s_median"),
         p95_ms=optional_float_field(row, "p95_ms_median"),
         p99_ms=optional_float_field(row, "p99_ms_median"),
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=int_field(row, "warmup_errors_total"),
         error_rate_percent=optional_float_field(row, "error_rate_percent"),
-        rss_mb=optional_float_field(row, "rss_mb_max"),
-        threads=optional_int_field(row, "threads_max"),
-        fds=optional_int_field(row, "fds_max"),
+        rss_mb=lifecycle_rss / 1024 / 1024
+        if is_lifecycle and lifecycle_rss is not None
+        else None
+        if is_lifecycle
+        else optional_float_field(row, "rss_mb_max"),
+        threads=optional_int_field(resources, "sampled_peak_threads_max")
+        if is_lifecycle
+        else optional_int_field(row, "threads_max"),
+        fds=optional_int_field(resources, "sampled_peak_fds_max")
+        if is_lifecycle
+        else optional_int_field(row, "fds_max"),
     )
 
 

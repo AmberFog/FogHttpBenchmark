@@ -66,6 +66,7 @@ async def run_async_create_first_request(
     config: ClientConfig,
     scenario: Scenario,
     url: str,
+    *,
     iterations: int,
     repeat: int,
 ) -> ClientCreationResult:
@@ -111,6 +112,7 @@ async def run_async_reused_request(
     config: ClientConfig,
     scenario: Scenario,
     url: str,
+    *,
     iterations: int,
     repeat: int,
 ) -> ClientCreationResult:

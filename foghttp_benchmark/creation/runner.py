@@ -150,8 +150,16 @@ async def measure_create_first_request(
     repeat: int,
 ) -> ClientCreationResult:
     if spec.mode == SYNC_MODE:
-        return await asyncio.to_thread(run_sync_create_first_request, spec, config, scenario, url, iterations, repeat)
-    return await run_async_create_first_request(spec, config, scenario, url, iterations, repeat)
+        return await asyncio.to_thread(
+            run_sync_create_first_request,
+            spec,
+            config,
+            scenario,
+            url,
+            iterations=iterations,
+            repeat=repeat,
+        )
+    return await run_async_create_first_request(spec, config, scenario, url, iterations=iterations, repeat=repeat)
 
 
 async def measure_reused_request(
@@ -164,8 +172,16 @@ async def measure_reused_request(
     repeat: int,
 ) -> ClientCreationResult:
     if spec.mode == SYNC_MODE:
-        return await asyncio.to_thread(run_sync_reused_request, spec, config, scenario, url, iterations, repeat)
-    return await run_async_reused_request(spec, config, scenario, url, iterations, repeat)
+        return await asyncio.to_thread(
+            run_sync_reused_request,
+            spec,
+            config,
+            scenario,
+            url,
+            iterations=iterations,
+            repeat=repeat,
+        )
+    return await run_async_reused_request(spec, config, scenario, url, iterations=iterations, repeat=repeat)
 
 
 async def measure_many_clients(

@@ -1,5 +1,6 @@
 __all__ = ("streaming_cases",)
 
+from foghttp_benchmark.streaming.bytes_payloads import streaming_bytes_sha256
 from foghttp_benchmark.streaming.models import StreamConsumeMode, StreamingCase
 from foghttp_benchmark.streaming.text_payloads import TextPayload, streaming_text_payloads
 
@@ -15,6 +16,7 @@ def streaming_cases() -> dict[str, StreamingCase]:
             delay_ms=0,
             consume="all",
             description="Consume a 64 KiB streamed response to EOF.",
+            expected_sha256=streaming_bytes_sha256(65_536),
         ),
         "stream-1m": StreamingCase(
             name="stream-1m",
@@ -24,6 +26,7 @@ def streaming_cases() -> dict[str, StreamingCase]:
             delay_ms=0,
             consume="all",
             description="Consume a 1 MiB streamed response to EOF.",
+            expected_sha256=streaming_bytes_sha256(1_048_576),
         ),
         "drip-64k-1ms": StreamingCase(
             name="drip-64k-1ms",
@@ -33,6 +36,7 @@ def streaming_cases() -> dict[str, StreamingCase]:
             delay_ms=1,
             consume="all",
             description="Consume a 64 KiB response delivered as delayed body chunks.",
+            expected_sha256=streaming_bytes_sha256(65_536),
         ),
         "first-chunk-close-1m": StreamingCase(
             name="first-chunk-close-1m",

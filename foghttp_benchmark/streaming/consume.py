@@ -8,6 +8,7 @@ __all__ = (
 )
 
 from collections.abc import AsyncIterator, Iterator
+from hashlib import sha256
 import time
 
 from foghttp_benchmark.streaming.models import StreamingCase, StreamingOutcome
@@ -23,11 +24,14 @@ async def consume_async_bytes(
     bytes_read = 0
     chunks_read = 0
     first_item_ms: float | None = None
+    digest = sha256() if case.consume == "all" else None
     async for chunk in chunks:
         if first_item_ms is None:
             first_item_ms = _elapsed_ms(started_ns)
         bytes_read += len(chunk)
         chunks_read += 1
+        if digest is not None:
+            digest.update(chunk)
         if case.consume == "first-chunk":
             break
     return StreamingOutcome(
@@ -35,6 +39,8 @@ async def consume_async_bytes(
         bytes_read=bytes_read,
         chunks_read=chunks_read,
         first_chunk_ms=first_item_ms,
+        body_sha256=digest.hexdigest() if digest is not None else None,
+        eof_received=case.consume == "all",
     )
 
 
@@ -48,11 +54,14 @@ def consume_sync_bytes(
     bytes_read = 0
     chunks_read = 0
     first_item_ms: float | None = None
+    digest = sha256() if case.consume == "all" else None
     for chunk in chunks:
         if first_item_ms is None:
             first_item_ms = _elapsed_ms(started_ns)
         bytes_read += len(chunk)
         chunks_read += 1
+        if digest is not None:
+            digest.update(chunk)
         if case.consume == "first-chunk":
             break
     return StreamingOutcome(
@@ -60,6 +69,8 @@ def consume_sync_bytes(
         bytes_read=bytes_read,
         chunks_read=chunks_read,
         first_chunk_ms=first_item_ms,
+        body_sha256=digest.hexdigest() if digest is not None else None,
+        eof_received=case.consume == "all",
     )
 
 

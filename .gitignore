@@ -266,6 +266,9 @@ cython_debug/
 # Benchmark outputs
 results/
 
+# macOS directory metadata
+.DS_Store
+
 # Local context files
 BENCHMARK_CONTEXT.md
 CONTEXT.md

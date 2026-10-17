@@ -105,9 +105,9 @@ async def run_request_builder_case(
         spec,
         base_url,
         case,
-        iterations,
-        warmup,
-        repeat,
+        iterations=iterations,
+        warmup=warmup,
+        repeat=repeat,
     )
 
 
@@ -150,6 +150,7 @@ def run_sync_request_builder_case(
     spec: RequestBuilderClientSpec,
     base_url: str,
     case: RequestBuilderCase,
+    *,
     iterations: int,
     warmup: int,
     repeat: int,

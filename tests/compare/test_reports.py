@@ -196,3 +196,41 @@ def test_cli_rejects_invalid_top_value() -> None:
 
     assert result.exit_code != 0
     assert "top must be at least 1" in result.output
+
+
+def test_cli_compare_accepts_positional_reports_and_named_options(tmp_path: Path) -> None:
+    old_report = write_report(
+        tmp_path,
+        "old.json",
+        aggregate=[request_row("foghttp", ok_req_s=100.0, p95_ms=2.0)],
+        foghttp_version="0.4.1",
+    )
+    new_report = write_report(
+        tmp_path,
+        "new.json",
+        aggregate=[request_row("foghttp", ok_req_s=120.0, p95_ms=1.0)],
+        foghttp_version="0.4.2",
+    )
+    output = tmp_path / "comparison.md"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "compare",
+            str(old_report),
+            str(new_report),
+            "--output",
+            str(output),
+            "--focus-client",
+            "foghttp",
+            "--top",
+            "1",
+            "--comparison-axis",
+            "foghttp-source",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    markdown = output.read_text()
+    assert "+20.0%" in markdown
+    assert "foghttp-source" in markdown

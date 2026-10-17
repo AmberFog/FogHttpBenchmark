@@ -3,6 +3,7 @@ __all__ = ("validity_payload", "validity_summary_from_payload")
 from typing import cast
 
 from foghttp_benchmark.models import JsonObject
+from foghttp_benchmark.validity.helpers import combined_status, reasons_allow_comparison
 from foghttp_benchmark.validity.models import VALIDITY_STATUSES, ValidityReason, ValidityStatus, ValiditySummary
 
 
@@ -32,11 +33,12 @@ def validity_summary_from_payload(payload: JsonObject) -> ValiditySummary | None
     if status is None:
         return None
     reasons = tuple(reason_from_payload(item) for item in list_field(payload.get("reasons")))
+    status = combined_status((status, *(reason.status for reason in reasons)))
     reason_counts = reason_counts_from_payload(payload.get("reason_counts"))
     if not reason_counts:
         reason_counts = count_reasons(reasons)
     status_is_valid = status == "valid"
-    status_can_compare = status in ("valid", "warning")
+    status_can_compare = status in ("valid", "warning") and reasons_allow_comparison(reasons)
     return ValiditySummary(
         status=status,
         is_valid=bool_value(payload.get("is_valid"), default=status_is_valid) and status_is_valid,

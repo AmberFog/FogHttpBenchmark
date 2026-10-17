@@ -8,7 +8,7 @@ import sys
 import time
 from typing import cast
 
-from foghttp_benchmark.constants import PROXY_CONNECT_SUITE
+from foghttp_benchmark.constants import PROXY_CONNECT_SUITE, RESPONSE_STREAMING_SUITE
 from foghttp_benchmark.isolation.models import PER_CLIENT_SCENARIO_ISOLATION, ChildProcessResult
 from foghttp_benchmark.models import BenchmarkArgs, JsonObject
 from foghttp_benchmark.reports import package_versions, report_environment
@@ -81,13 +81,11 @@ def build_metadata(
     skipped: dict[str, str],
     child_cooldown_s: float,
 ) -> JsonObject:
-    first_metadata = first_child_metadata(child_payloads)
+    first_metadata = report_metadata(child_payloads[0]) if child_payloads else {}
     server = first_metadata.get("server", "isolated child benchmark processes")
     versions = first_metadata.get("package_versions")
     if not isinstance(versions, dict):
-        versions = package_versions(
-            ["foghttp", "httpx", "httpxyz", "aiohttp", "zapros", "faker", "jinja2", "psutil", "rich", "typer"],
-        )
+        versions = package_versions()
     metadata: JsonObject = {
         "timestamp": timestamp,
         "python": sys.version,
@@ -104,13 +102,45 @@ def build_metadata(
             "unit": isolation_unit(args),
             "child_cooldown_s": child_cooldown_s,
             "child_count": len(child_results),
-            "children": [child_result_payload(result) for result in child_results],
+            "children": child_diagnostics(child_results, child_payloads),
         },
     }
+    for key in ("package_sources", "research_provenance"):
+        for payload in child_payloads:
+            child_metadata = payload.get("metadata")
+            if isinstance(child_metadata, dict) and key in child_metadata:
+                metadata[key] = child_metadata[key]
+                break
     run_settling = first_metadata.get("run_settling")
     if isinstance(run_settling, dict):
         metadata["run_settling"] = run_settling
+    if args.suite == RESPONSE_STREAMING_SUITE:
+        metadata.update(streaming_metadata(child_payloads))
     return metadata
+
+
+def streaming_metadata(child_payloads: list[JsonObject]) -> JsonObject:
+    children = [report_metadata(payload) for payload in child_payloads]
+    merged: JsonObject = {}
+    for key in ("measurement_scope", "streaming_metric_schema_version", "bytes_payload_policy"):
+        values = [child.get(key) for child in children]
+        if any(key in child for child in children):
+            if any(value != values[0] for value in values) or any(key not in child for child in children):
+                msg = f"Isolated streaming children disagree on {key}"
+                raise ValueError(msg)
+            merged[key] = values[0]
+    for key in ("throughput_scopes", "timing_scopes"):
+        if not any(key in child for child in children):
+            continue
+        scopes: set[str] = set()
+        for child in children:
+            value = child.get(key)
+            if not isinstance(value, list) or any(not isinstance(scope, str) for scope in value):
+                msg = f"Isolated streaming child field {key} must be a list of strings"
+                raise ValueError(msg)
+            scopes.update(str(scope) for scope in value)
+        merged[key] = sorted(scopes)
+    return merged
 
 
 def isolation_unit(args: BenchmarkArgs) -> str:
@@ -119,10 +149,8 @@ def isolation_unit(args: BenchmarkArgs) -> str:
     return "client"
 
 
-def first_child_metadata(child_payloads: list[JsonObject]) -> JsonObject:
-    if not child_payloads:
-        return {}
-    metadata = child_payloads[0].get("metadata")
+def report_metadata(payload: JsonObject) -> JsonObject:
+    metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
         return {}
     return cast("JsonObject", metadata)
@@ -212,6 +240,24 @@ def merge_skipped(parent_skipped: dict[str, str], child_payloads: list[JsonObjec
         for key, value in skipped.items():
             merged.setdefault(str(key), str(value))
     return merged
+
+
+def child_diagnostics(
+    child_results: list[ChildProcessResult],
+    child_payloads: list[JsonObject],
+) -> list[JsonObject]:
+    successful_payloads = iter(child_payloads)
+    diagnostics: list[JsonObject] = []
+    for result in child_results:
+        payload = child_result_payload(result)
+        if result.returncode == 0 and result.report_path is not None:
+            child_metadata = next(successful_payloads).get("metadata")
+            if isinstance(child_metadata, dict):
+                for key in ("package_sources", "research_provenance"):
+                    if key in child_metadata:
+                        payload[key] = child_metadata[key]
+        diagnostics.append(payload)
+    return diagnostics
 
 
 def child_result_payload(result: ChildProcessResult) -> JsonObject:

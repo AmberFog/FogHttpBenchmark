@@ -55,7 +55,7 @@ class BenchmarkRow:
     mode: str
     client: str
     scenario: str
-    primary_value: float
+    primary_value: float | None
     p95_ms: float | None
     p99_ms: float | None
     errors_total: int
@@ -76,6 +76,7 @@ class ComparisonMetadata:
     new_timestamp: str
     old_focus_version: str
     new_focus_version: str
+    comparison_axis: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +150,10 @@ class ResourceSummary:
     new_fds_max: int | None
     old_errors_total: int
     new_errors_total: int
+    comparable: bool = True
+    old_measurement_scope: str = "legacy-unspecified"
+    new_measurement_scope: str = "legacy-unspecified"
+    incomparable_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

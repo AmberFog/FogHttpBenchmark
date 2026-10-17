@@ -107,4 +107,5 @@ def build_aggregate_row(
         ),
         recovery_failures=sum(1 for result in results if result.recovery_ok is False),
         error_types=merge_error_types(result.error_types for result in results),
+        warmup_error_types=merge_error_types(result.warmup_error_types for result in results),
     )

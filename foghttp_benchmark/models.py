@@ -40,6 +40,20 @@ class BenchmarkArgs:
     iterations: int
     client_counts: str
     isolation: str = "per-client-scenario"
+    streaming_profile: str = "default"
+    streaming_payload_bytes: int = 1_048_576
+    streaming_server_write_bytes: int = 65_536
+    streaming_server_delay_s: float = 0.0
+    streaming_read_bytes: int | None = None
+    streaming_consumer_delay_s: float = 0.0
+    streaming_instrumentation: str = "control"
+    streaming_profiler_label: str | None = None
+    streaming_profiler: str = "none"
+    streaming_perf_sample_frequency_hz: int = 499
+    streaming_chunk_sample_cap: int = 128
+    streaming_minimum_duration_s: float = 0.0
+    streaming_max_window_streams: int = 2048
+    streaming_server_observations: bool = False
 
 
 @dataclass(frozen=True)
