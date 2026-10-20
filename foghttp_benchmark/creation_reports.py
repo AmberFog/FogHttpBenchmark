@@ -4,23 +4,31 @@ __all__ = (
     "write_creation_reports",
 )
 
-from collections.abc import Iterable
-from dataclasses import asdict, dataclass
-import json
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import platform
 import statistics
 import sys
 import time
-from typing import TypeVar
 
-from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES
+from foghttp_benchmark.measurement_timing import current_timing_scope
 from foghttp_benchmark.models import BenchmarkArgs, ClientCreationResult
-from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.rendering import (
+    RenderEnvironment,
+    SuiteRenderContext,
+    load_report_template,
+    render_suite_markdown,
+)
+from foghttp_benchmark.report_publication import publish_report
+from foghttp_benchmark.reports import package_versions
+from foghttp_benchmark.resource_metrics import (
+    RESOURCE_METRIC_SCHEMA_VERSION,
+    ResourceCoverage,
+    optional_resource_max,
+    resource_coverage,
+)
+from foghttp_benchmark.statistics import coefficient_of_variation
 from foghttp_benchmark.validity.reports import metadata_with_validity
-
-
-OptionalMaxValue = TypeVar("OptionalMaxValue", int, float)
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +54,7 @@ class ClientCreationAggregateRow:
     peak_fds_delta_max: int | None
     end_fds_delta_max: int | None
     errors_total: int
+    resource_coverage: ResourceCoverage = field(default_factory=dict)
 
 
 def aggregate_creation_results(results: list[ClientCreationResult]) -> list[ClientCreationAggregateRow]:
@@ -74,35 +83,31 @@ def aggregate_creation_results(results: list[ClientCreationResult]) -> list[Clie
                 p99_ms_median=statistics.median(item.p99_ms for item in items),
                 close_p50_ms_median=optional_median([item.close_p50_ms for item in items]),
                 close_p95_ms_median=optional_median([item.close_p95_ms for item in items]),
-                peak_rss_delta_mb_max=optional_max([item.peak_rss_delta_mb for item in items]),
-                end_rss_delta_mb_max=optional_max([item.end_rss_delta_mb for item in items]),
-                peak_threads_delta_max=optional_max([item.peak_threads_delta for item in items]),
-                end_threads_delta_max=optional_max([item.end_threads_delta for item in items]),
-                peak_fds_delta_max=optional_max([item.peak_fds_delta for item in items]),
-                end_fds_delta_max=optional_max([item.end_fds_delta for item in items]),
+                peak_rss_delta_mb_max=optional_resource_max(item.peak_rss_delta_mb for item in items),
+                end_rss_delta_mb_max=optional_resource_max(item.end_rss_delta_mb for item in items),
+                peak_threads_delta_max=optional_resource_max(item.peak_threads_delta for item in items),
+                end_threads_delta_max=optional_resource_max(item.end_threads_delta for item in items),
+                peak_fds_delta_max=optional_resource_max(item.peak_fds_delta for item in items),
+                end_fds_delta_max=optional_resource_max(item.end_fds_delta for item in items),
                 errors_total=sum(item.errors for item in items),
+                resource_coverage=resource_coverage(
+                    {
+                        "peak_rss_delta_mb_max": [item.peak_rss_delta_mb for item in items],
+                        "end_rss_delta_mb_max": [item.end_rss_delta_mb for item in items],
+                        "peak_threads_delta_max": [item.peak_threads_delta for item in items],
+                        "end_threads_delta_max": [item.end_threads_delta for item in items],
+                        "peak_fds_delta_max": [item.peak_fds_delta for item in items],
+                        "end_fds_delta_max": [item.end_fds_delta for item in items],
+                    },
+                ),
             ),
         )
     return rows
 
 
-def coefficient_of_variation(values: list[float]) -> float:
-    if len(values) < MIN_VARIATION_SAMPLES:
-        return 0.0
-    mean = statistics.mean(values)
-    if mean == 0:
-        return 0.0
-    return (statistics.stdev(values) / mean) * 100
-
-
 def optional_median(values: list[float | None]) -> float | None:
     present = [value for value in values if value is not None]
     return statistics.median(present) if present else None
-
-
-def optional_max(values: Iterable[OptionalMaxValue | None]) -> OptionalMaxValue | None:
-    present = [value for value in values if value is not None]
-    return max(present) if present else None
 
 
 def write_creation_reports(
@@ -111,7 +116,6 @@ def write_creation_reports(
     args: BenchmarkArgs,
 ) -> None:
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_creation_results(results)
     aggregate_rows = [asdict(row) for row in aggregate]
@@ -123,45 +127,31 @@ def write_creation_reports(
             "platform": platform.platform(),
             "server": "local asyncio HTTP/1.1 loopback server",
             "suite": args.suite,
+            "timing_scope": current_timing_scope(args.suite),
+            "resource_metric_schema_version": RESOURCE_METRIC_SCHEMA_VERSION,
             "args": vars(args),
             "package_versions": package_versions(),
             "skipped": skipped,
         },
         aggregate_rows,
     )
-    payload = {
+    payload: dict[str, object] = {
         "metadata": metadata_payload,
         "aggregate": aggregate_rows,
         "runs": run_rows,
     }
-    json_path = output_dir / f"{timestamp}.json"
-    md_path = output_dir / f"{timestamp}.md"
-    latest_json = output_dir / "latest.json"
-    latest_md = output_dir / "latest.md"
-
-    json_text = json.dumps(payload, indent=2, sort_keys=True)
-    json_path.write_text(json_text + "\n")
-    latest_json.write_text(json_text + "\n")
-
-    markdown = render_creation_markdown_report(timestamp, aggregate, skipped, args, metadata_payload["validity"])
-    md_path.write_text(markdown)
-    latest_md.write_text(markdown)
-
-
-def render_creation_markdown_report(
-    timestamp: str,
-    aggregate: list[ClientCreationAggregateRow],
-    skipped: dict[str, str],
-    args: BenchmarkArgs,
-    validity: object,
-) -> str:
-    template = report_environment().get_template("creation_report.md.j2")
-    return template.render(
-        aggregate=aggregate,
-        args=args,
-        platform_name=platform.platform(),
-        python_version=platform.python_version(),
-        skipped=skipped,
-        timestamp=timestamp,
-        validity=validity,
+    markdown = render_suite_markdown(
+        load_report_template("creation_report.md.j2"),
+        SuiteRenderContext(
+            timestamp=timestamp,
+            args=args,
+            aggregate=aggregate,
+            skipped=skipped,
+            validity=metadata_payload["validity"],
+            environment=RenderEnvironment(
+                python_version=platform.python_version(),
+                platform_name=platform.platform(),
+            ),
+        ),
     )
+    publish_report(output_dir, timestamp, payload, markdown)

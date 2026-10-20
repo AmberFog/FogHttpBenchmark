@@ -4,21 +4,22 @@ import asyncio
 import inspect
 import random
 import time
-from typing import cast
 
 from foghttp_benchmark.constants import ASYNC_MODE
 from foghttp_benchmark.progress import ProgressReporter, progress_stage
 from foghttp_benchmark.request_builder.clients import client_config_for_case, request_matches_case
 from foghttp_benchmark.request_builder.models import (
     AsyncRequestBuilderAdapter,
+    AsyncRequestBuilderClientSpec,
     RequestBuilderCase,
     RequestBuilderClientSpec,
     RequestBuilderResult,
     RequestBuilderStats,
     SyncRequestBuilderAdapter,
+    SyncRequestBuilderClientSpec,
 )
 from foghttp_benchmark.resources import ResourceSampler, take_resource_snapshot
-from foghttp_benchmark.runner import percentile
+from foghttp_benchmark.statistics import percentile
 
 
 SUCCESS_STATUS = 200
@@ -113,7 +114,7 @@ async def run_request_builder_case(
 
 async def run_async_request_builder_case(
     *,
-    spec: RequestBuilderClientSpec,
+    spec: AsyncRequestBuilderClientSpec,
     base_url: str,
     case: RequestBuilderCase,
     iterations: int,
@@ -121,7 +122,7 @@ async def run_async_request_builder_case(
     repeat: int,
 ) -> RequestBuilderResult:
     config = client_config_for_case(case, base_url=base_url)
-    client = cast("AsyncRequestBuilderAdapter", spec.factory(config))
+    client = spec.factory(config)
     try:
         await warmup_async(client, case, base_url, warmup)
         async with ResourceSampler() as sampler:
@@ -147,7 +148,7 @@ async def run_async_request_builder_case(
 
 
 def run_sync_request_builder_case(
-    spec: RequestBuilderClientSpec,
+    spec: SyncRequestBuilderClientSpec,
     base_url: str,
     case: RequestBuilderCase,
     *,
@@ -156,7 +157,7 @@ def run_sync_request_builder_case(
     repeat: int,
 ) -> RequestBuilderResult:
     config = client_config_for_case(case, base_url=base_url)
-    client = cast("SyncRequestBuilderAdapter", spec.factory(config))
+    client = spec.factory(config)
     try:
         warmup_sync(client, case, base_url, warmup)
         started = time.perf_counter()

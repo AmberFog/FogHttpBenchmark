@@ -1,7 +1,7 @@
 __all__ = ("available_one_upstream_clients",)
 
 import importlib
-from typing import Protocol
+from typing import Literal, Protocol
 
 from foghttp_benchmark.clients.httpxyz_import import import_httpxyz
 from foghttp_benchmark.clients.utils import client_stats_from_raw
@@ -19,11 +19,12 @@ from foghttp_benchmark.one_upstream.cases import (
 )
 from foghttp_benchmark.one_upstream.models import (
     AsyncOneUpstreamAdapter,
+    AsyncOneUpstreamClientSpec,
     OneUpstreamCase,
     OneUpstreamClientConfig,
-    OneUpstreamClientFactory,
     OneUpstreamClientSpec,
     SyncOneUpstreamAdapter,
+    SyncOneUpstreamClientSpec,
 )
 
 
@@ -58,6 +59,8 @@ class _SyncClient(Protocol):
 
 
 class _AsyncOneUpstreamClientAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     def __init__(self, client: _AsyncClient) -> None:
         self.client = client
 
@@ -78,6 +81,8 @@ class _AsyncOneUpstreamClientAdapter:
 
 
 class _SyncOneUpstreamClientAdapter:
+    mode: Literal["sync"] = SYNC_MODE
+
     def __init__(self, client: _SyncClient) -> None:
         self.client = client
 
@@ -108,28 +113,24 @@ def available_one_upstream_clients(
     requested_clients: list[str],
     requested_modes: list[str],
 ) -> tuple[list[OneUpstreamClientSpec], dict[str, str]]:
-    factories: dict[str, dict[str, OneUpstreamClientFactory]] = {
-        ASYNC_MODE: {
-            "foghttp": make_foghttp_async,
-            "httpx": make_httpx_async,
-            "httpxyz": make_httpxyz_async,
-        },
-        SYNC_MODE: {
-            "foghttp": make_foghttp_sync,
-            "httpx": make_httpx_sync,
-            "httpxyz": make_httpxyz_sync,
-        },
-    }
+    specs: tuple[OneUpstreamClientSpec, ...] = (
+        AsyncOneUpstreamClientSpec(name="foghttp", factory=make_foghttp_async),
+        AsyncOneUpstreamClientSpec(name="httpx", factory=make_httpx_async),
+        AsyncOneUpstreamClientSpec(name="httpxyz", factory=make_httpxyz_async),
+        SyncOneUpstreamClientSpec(name="foghttp", factory=make_foghttp_sync),
+        SyncOneUpstreamClientSpec(name="httpx", factory=make_httpx_sync),
+        SyncOneUpstreamClientSpec(name="httpxyz", factory=make_httpxyz_sync),
+    )
+    specs_by_identity: dict[tuple[str, str], OneUpstreamClientSpec] = {(spec.mode, spec.name): spec for spec in specs}
     clients: list[OneUpstreamClientSpec] = []
     skipped: dict[str, str] = {}
     for mode in requested_modes:
-        mode_factories = factories.get(mode)
-        if mode_factories is None:
+        if mode not in {ASYNC_MODE, SYNC_MODE}:
             skipped[f"{mode}:*"] = "unknown mode"
             continue
         for name in requested_clients:
-            factory = mode_factories.get(name)
-            if factory is None:
+            spec = specs_by_identity.get((mode, name))
+            if spec is None:
                 skipped[f"{mode}:{name}"] = "one-upstream suite requires comparable client defaults support"
                 continue
             try:
@@ -137,7 +138,7 @@ def available_one_upstream_clients(
             except Exception as exc:  # noqa: BLE001
                 skipped[f"{mode}:{name}"] = f"{type(exc).__name__}: {exc}"
                 continue
-            clients.append(OneUpstreamClientSpec(name=name, mode=mode, factory=factory))
+            clients.append(spec)
     return clients, skipped
 
 

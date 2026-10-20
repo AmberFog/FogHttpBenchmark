@@ -27,7 +27,7 @@ from foghttp_benchmark.progress import (
 )
 from foghttp_benchmark.resource.scenarios import ResourceCase
 from foghttp_benchmark.resources import ResourceSampler
-from foghttp_benchmark.runner import percentile
+from foghttp_benchmark.statistics import percentile
 
 
 async def run_resource_backpressure_benchmarks(
@@ -172,8 +172,8 @@ async def run_resource_case(
             progress=progress,
             stage_name=f"Warmup resource load: {label}",
         )
-        started = time.perf_counter()
         async with ResourceSampler() as sampler, TransportStatsSampler(client) as stats_sampler:
+            started = time.perf_counter()
             load_result = await run_case_load_with_progress(
                 client,
                 scenario,
@@ -185,7 +185,7 @@ async def run_resource_case(
                 progress=progress,
                 stage_name=f"Measured resource load: {label}",
             )
-        duration = time.perf_counter() - started
+            duration = time.perf_counter() - started
         peak_active_requests = stats_sampler.peak_active_requests
         peak_pending_requests = stats_sampler.peak_pending_requests
         peak_buffered_response_bytes = stats_sampler.peak_buffered_response_bytes

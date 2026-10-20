@@ -121,7 +121,9 @@ def generate_localhost_certificate(*, ca_cert_path: Path, cert_path: Path, key_p
         "subjectAltName=DNS:localhost,IP:127.0.0.1\n"
         "basicConstraints=critical,CA:FALSE\n"
         "keyUsage=critical,digitalSignature,keyEncipherment\n"
-        "extendedKeyUsage=serverAuth\n",
+        "extendedKeyUsage=serverAuth\n"
+        "subjectKeyIdentifier=hash\n"
+        "authorityKeyIdentifier=keyid:always\n",
     )
     ca_command = [
         openssl_path,
@@ -142,6 +144,8 @@ def generate_localhost_certificate(*, ca_cert_path: Path, cert_path: Path, key_p
         "basicConstraints=critical,CA:TRUE",
         "-addext",
         "keyUsage=critical,keyCertSign,cRLSign",
+        "-addext",
+        "subjectKeyIdentifier=hash",
     ]
     csr_command = [
         openssl_path,

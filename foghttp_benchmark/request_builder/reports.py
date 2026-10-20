@@ -3,19 +3,31 @@ __all__ = (
     "write_request_builder_reports",
 )
 
-from collections.abc import Iterable
 from dataclasses import asdict, replace
-import json
 from pathlib import Path
 import platform
 import statistics
 import sys
 import time
 
-from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES, REQUEST_BUILDER_SUITE
+from foghttp_benchmark.constants import REQUEST_BUILDER_SUITE
+from foghttp_benchmark.measurement_timing import current_timing_scope
 from foghttp_benchmark.models import BenchmarkArgs
-from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.rendering import (
+    RenderEnvironment,
+    SuiteRenderContext,
+    load_report_template,
+    render_suite_markdown,
+)
+from foghttp_benchmark.report_publication import publish_report
+from foghttp_benchmark.reports import package_versions
 from foghttp_benchmark.request_builder.models import RequestBuilderAggregateRow, RequestBuilderResult
+from foghttp_benchmark.resource_metrics import (
+    RESOURCE_METRIC_SCHEMA_VERSION,
+    optional_resource_max,
+    resource_coverage,
+)
+from foghttp_benchmark.statistics import coefficient_of_variation, merge_error_types
 from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
@@ -66,11 +78,18 @@ def build_aggregate_row(
         p50_ms_median=statistics.median(item.p50_ms for item in items),
         p95_ms_median=statistics.median(item.p95_ms for item in items),
         p99_ms_median=statistics.median(item.p99_ms for item in items),
-        rss_mb_max=max((item.peak_rss_mb or 0.0) for item in items),
-        threads_max=max((item.peak_threads or 0) for item in items),
-        fds_max=max((item.peak_fds or 0) for item in items),
+        rss_mb_max=optional_resource_max(item.peak_rss_mb for item in items),
+        threads_max=optional_resource_max(item.peak_threads for item in items),
+        fds_max=optional_resource_max(item.peak_fds for item in items),
         errors_total=sum(item.errors for item in items),
         error_types=merge_error_types(item.error_types for item in items),
+        resource_coverage=resource_coverage(
+            {
+                "rss_mb_max": [item.peak_rss_mb for item in items],
+                "threads_max": [item.peak_threads for item in items],
+                "fds_max": [item.peak_fds for item in items],
+            },
+        ),
     )
 
 
@@ -95,30 +114,12 @@ def baseline_ratio(value: float, baseline: float | None) -> float | None:
     return value / baseline
 
 
-def coefficient_of_variation(values: list[float]) -> float:
-    if len(values) < MIN_VARIATION_SAMPLES:
-        return 0.0
-    mean = statistics.mean(values)
-    if mean == 0:
-        return 0.0
-    return (statistics.stdev(values) / mean) * 100
-
-
-def merge_error_types(values: Iterable[dict[str, int]]) -> dict[str, int]:
-    merged: dict[str, int] = {}
-    for errors in values:
-        for key, count in errors.items():
-            merged[key] = merged.get(key, 0) + count
-    return merged
-
-
 def write_request_builder_reports(
     results: list[RequestBuilderResult],
     skipped: dict[str, str],
     args: BenchmarkArgs,
 ) -> None:
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_request_builder_results(results)
     aggregate_rows = [asdict(row) for row in aggregate]
@@ -130,48 +131,34 @@ def write_request_builder_reports(
             "platform": platform.platform(),
             "server": "none for build cases; local asyncio HTTP/1.1 loopback server for send-prepared cases",
             "suite": REQUEST_BUILDER_SUITE,
+            "timing_scope": current_timing_scope(REQUEST_BUILDER_SUITE),
+            "resource_metric_schema_version": RESOURCE_METRIC_SCHEMA_VERSION,
             "args": vars(args),
             "package_versions": package_versions(),
             "skipped": skipped,
         },
         aggregate_rows,
     )
-    payload = {
+    payload: dict[str, object] = {
         "metadata": metadata_payload,
         "aggregate": aggregate_rows,
         "runs": run_rows,
     }
-    json_path = output_dir / f"{timestamp}.json"
-    md_path = output_dir / f"{timestamp}.md"
-    latest_json = output_dir / "latest.json"
-    latest_md = output_dir / "latest.md"
-
-    json_text = json.dumps(payload, indent=2, sort_keys=True)
-    json_path.write_text(json_text + "\n")
-    latest_json.write_text(json_text + "\n")
-
-    markdown = render_request_builder_markdown_report(timestamp, aggregate, skipped, args, metadata_payload["validity"])
-    md_path.write_text(markdown)
-    latest_md.write_text(markdown)
-
-
-def render_request_builder_markdown_report(
-    timestamp: str,
-    aggregate: list[RequestBuilderAggregateRow],
-    skipped: dict[str, str],
-    args: BenchmarkArgs,
-    validity: object,
-) -> str:
-    template = report_environment().get_template("request_builder_report.md.j2")
-    return template.render(
-        aggregate=aggregate,
-        args=args,
-        platform_name=platform.platform(),
-        python_version=platform.python_version(),
-        skipped=skipped,
-        timestamp=timestamp,
-        validity=validity,
+    markdown = render_suite_markdown(
+        load_report_template("request_builder_report.md.j2"),
+        SuiteRenderContext(
+            timestamp=timestamp,
+            args=args,
+            aggregate=aggregate,
+            skipped=skipped,
+            validity=metadata_payload["validity"],
+            environment=RenderEnvironment(
+                python_version=platform.python_version(),
+                platform_name=platform.platform(),
+            ),
+        ),
     )
+    publish_report(output_dir, timestamp, payload, markdown)
 
 
 def kind_order(kind: str) -> int:

@@ -1,0 +1,208 @@
+{
+  "attribution_limits": {
+    "event_loop_wakeups": null,
+    "future_completions": null,
+    "native_copy_count": null,
+    "unavailable_reason": "Public bytes delivery/await observations cannot isolate native copies, loop wakeups or Future completion cost"
+  },
+  "batch": 1,
+  "bytes_read_total": 32,
+  "chunks_read_total": 2,
+  "cpu": {
+    "client": {
+      "after": {
+        "pid": 1212,
+        "probe_finished_ns": 1017000000,
+        "probe_started_ns": 1016000000,
+        "reason": null,
+        "system_s": 0.1,
+        "user_s": 0.2
+      },
+      "before": {
+        "pid": 1212,
+        "probe_finished_ns": 1001000000,
+        "probe_started_ns": 1000000000,
+        "reason": null,
+        "system_s": 0.05,
+        "user_s": 0.1
+      },
+      "cpu_seconds_per_verified_byte": 0.004687500000000001,
+      "cpu_seconds_per_wall_second": 13.636363636363638,
+      "cpu_wall_interpretation": "Aggregate process CPU seconds / wall seconds; multiple cores may exceed one",
+      "load_boundary_overhang_ns": 6000000,
+      "normalization_unavailable_reason": null,
+      "pid": 1212,
+      "resolution_s": null,
+      "resolution_unavailable_reason": "psutil/OS process counter resolution is not exposed by this measurement",
+      "scope": "Separate process user/system counters bracketing load, including the reported boundary probe span",
+      "system_s": 0.05,
+      "total_s": 0.15000000000000002,
+      "unavailable_reason": null,
+      "user_s": 0.1
+    },
+    "server": {
+      "after": {
+        "pid": 4242,
+        "probe_finished_ns": 1019000000,
+        "probe_started_ns": 1018000000,
+        "reason": "SyntheticUnavailable: isolated server counter",
+        "system_s": null,
+        "user_s": null
+      },
+      "before": {
+        "pid": 4242,
+        "probe_finished_ns": 1003000000,
+        "probe_started_ns": 1002000000,
+        "reason": "SyntheticUnavailable: isolated server counter",
+        "system_s": null,
+        "user_s": null
+      },
+      "cpu_seconds_per_verified_byte": null,
+      "cpu_seconds_per_wall_second": null,
+      "cpu_wall_interpretation": "Aggregate process CPU seconds / wall seconds; multiple cores may exceed one",
+      "load_boundary_overhang_ns": 6000000,
+      "normalization_unavailable_reason": null,
+      "pid": 4242,
+      "resolution_s": null,
+      "resolution_unavailable_reason": "psutil/OS process counter resolution is not exposed by this measurement",
+      "scope": "Separate process user/system counters bracketing load, including the reported boundary probe span",
+      "system_s": null,
+      "total_s": null,
+      "unavailable_reason": "SyntheticUnavailable: isolated server counter",
+      "user_s": null
+    }
+  },
+  "duration_s": 0.011,
+  "errors": [],
+  "expected_aborts": 0,
+  "failed_observed_bytes": 0,
+  "mb_per_second": 0.0027743252840909094,
+  "observation_budget": {
+    "dropped_delivery_samples": 0,
+    "dropped_trace_samples": 0,
+    "histogram_bins": 2,
+    "histogram_bins_cap": 4096,
+    "histogram_complete": true,
+    "record_cap": 4096,
+    "recorded_delivery_samples": 2,
+    "recorded_trace_samples": 2,
+    "records": 4,
+    "scope": "Shared per batch across all streams; delivery and diagnostic trace records share one cap",
+    "total_deliveries": 2
+  },
+  "ok_streams": 1,
+  "ok_streams_per_second": 90.90909090909092,
+  "overhead": {
+    "combined_s": 0.003,
+    "distribution_complete": true,
+    "limitation": "Harness cost estimate only; no transport/copy/wakeup attribution or baseline subtraction; excludes asyncio scheduling, slow-consumer sleeps and diagnostic await trace; one synthetic observer, original per-stream reset/sample-cap behavior differs; one replay per variant",
+    "limits": {
+      "bins": 1024,
+      "bytes": 268435456,
+      "chunks": 1000000
+    },
+    "observed_bytes": 32,
+    "observed_chunks": 2,
+    "reason": null,
+    "replay_bytes": 32,
+    "replay_chunks": 2,
+    "scalar_only_s": 0.003,
+    "scope": "Offline synthetic memoryview replay of exact observed size histogram; sorted sizes, original order omitted",
+    "sha256_only_s": 0.001,
+    "status": "ok"
+  },
+  "requests": 1,
+  "rounds": 1,
+  "samples": [
+    {
+      "bytes_read": 32,
+      "chunk_sample_cap": 128,
+      "chunks_read": 2,
+      "clock": "time.perf_counter_ns; monotonic; gap milliseconds and offset nanoseconds",
+      "clock_resolution_s": 1e-09,
+      "close_return_ms": 1.0,
+      "content_encoding": null,
+      "content_length": "32",
+      "delivery_sample_count": 2,
+      "delivery_samples": [
+        {
+          "gap_ms": null,
+          "index": 1,
+          "offset_ns": 2000000,
+          "size_bytes": 7
+        },
+        {
+          "gap_ms": 3.0,
+          "index": 2,
+          "offset_ns": 5000000,
+          "size_bytes": 25
+        }
+      ],
+      "delivery_samples_dropped": 0,
+      "delivery_samples_truncated": false,
+      "distribution": {
+        "bins_cap": 1024,
+        "complete": true,
+        "histogram": [
+          {
+            "count": 1,
+            "size_bytes": 7
+          },
+          {
+            "count": 1,
+            "size_bytes": 25
+          }
+        ],
+        "max_bytes": 25,
+        "min_bytes": 7,
+        "observed_count": 2
+      },
+      "duration_ms": 9.0,
+      "empty_deliveries": 0,
+      "eof": true,
+      "error": null,
+      "first_item_ms": 2.0,
+      "gap_samples_ms": [
+        3.0
+      ],
+      "gap_scope": "Public Python delivery to delivery, including prior hashing/bookkeeping/consumer delay",
+      "http_version": "HTTP/1.1",
+      "sampling_rule": "first N nonempty deliveries per stream until the shared batch cap; adjacent arrival gaps, no extrapolation",
+      "sha256": "EXPECTED_PAYLOAD_SHA256",
+      "status": "ok",
+      "status_code": 200,
+      "stream": 1,
+      "trace": [
+        {
+          "await_finished_ns": 1007000000,
+          "await_start_ns": 1006000000,
+          "consumer_finished_ns": 1008000000,
+          "index": 1
+        },
+        {
+          "await_finished_ns": 1010000000,
+          "await_start_ns": 1009000000,
+          "consumer_finished_ns": 1011000000,
+          "index": 2
+        }
+      ],
+      "trace_samples_dropped": 0,
+      "trace_scope": "Diagnostic public anext await and harness consumer timestamps; not native wakeups or copies",
+      "transfer_encoding": null,
+      "verified_success_bytes": 32
+    }
+  ],
+  "streams_per_second": 90.90909090909092,
+  "timing": {
+    "clock": "time.perf_counter_ns; monotonic; nanoseconds",
+    "clock_resolution_s": 1e-09,
+    "digest_finalize_duration_ns": 1000000,
+    "load_finished_ns": 1015000000,
+    "load_started_ns": 1004000000,
+    "scope": "Async scheduling, bytes iteration, incremental SHA-256, scalar observations, consumer delays and context exit; stops before CPU end probes, digest finalization/comparison, replay, sampler teardown, client close and reports",
+    "verified_only_after_finalization": true
+  },
+  "total_observed_bytes": 32,
+  "verified_bytes_per_second": 2909.0909090909095,
+  "verified_success_bytes": 32
+}

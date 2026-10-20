@@ -17,3 +17,7 @@
 {% endfor %}
 
 Detailed suite-specific Markdown reports are stored in each child output directory.
+
+{% if aggregate|selectattr("resource_coverage", "defined")|list %}
+{% include "resource_coverage.md.j2" %}
+{% endif %}

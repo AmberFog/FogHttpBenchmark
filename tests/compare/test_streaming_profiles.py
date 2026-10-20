@@ -5,7 +5,7 @@ import pytest
 
 from foghttp_benchmark.compare.analysis import compare_reports, wins_for_report
 from foghttp_benchmark.compare.loading import load_benchmark_report
-from foghttp_benchmark.compare.reports import render_compare_markdown
+from foghttp_benchmark.rendering import load_report_template, render_compare_markdown
 from tests.compare.factories import write_report as write_generic_report
 from tests.streaming.attribution_report_factory import mutate_report, write_report
 
@@ -49,7 +49,10 @@ def test_attribution_profile_corruption_cannot_disable_raw_validation_or_enable_
         assert wins_for_report(report, "foghttp") is None
     assert comparison.validity.blocks_strong_conclusions
     assert comparison.wins is None
-    assert "Competitive Position" not in render_compare_markdown(comparison)
+    assert "Competitive Position" not in render_compare_markdown(
+        load_report_template("compare_report.md.j2"),
+        comparison,
+    )
 
 
 @pytest.mark.parametrize("remove_row_profile", [False, True])
@@ -106,7 +109,15 @@ def test_lifecycle_profile_corruption_cannot_hide_missing_process_evidence(
                     "mode": "async",
                     "client": "foghttp",
                     "case": "stream-1m",
+                    "read": "bytes",
                     "consume": "all",
+                    "concurrency": 1,
+                    "request_limit": 1,
+                    "requests": 20,
+                    "repeats": 1,
+                    "ok_streams_total": 20,
+                    "errors_total": 0,
+                    "warmup_errors_total": 0,
                     "configuration": {"body_bytes": 1_048_576},
                     "ok_streams_s_median": 100.0,
                 },

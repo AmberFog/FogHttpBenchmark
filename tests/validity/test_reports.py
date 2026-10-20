@@ -1,4 +1,4 @@
-from foghttp_benchmark.reports import report_environment
+from foghttp_benchmark.rendering import report_environment
 from foghttp_benchmark.validity.models import ValidityReason, ValiditySummary
 from foghttp_benchmark.validity.serialization import validity_payload
 

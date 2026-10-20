@@ -1,24 +1,22 @@
 __all__ = ("load_benchmark_report",)
 
-import json
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 from foghttp_benchmark.compare.models import BenchmarkReport, BenchmarkRow, BenchmarkSuite, JsonObject
-from foghttp_benchmark.streaming.attribution_reports import revalidate_attribution_rows
+from foghttp_benchmark.report_schema.decoding import load_report
+from foghttp_benchmark.report_schema.fields import require_integer, require_number, require_string
+from foghttp_benchmark.report_schema.identity import aggregate_identity, comparison_group
+from foghttp_benchmark.report_schema.resources import resource_coverage_field
 from foghttp_benchmark.validity.classification import validity_summary_from_metadata
-from foghttp_benchmark.validity.streaming_profiles import uses_streaming_profile
 
 
 def load_benchmark_report(path: Path) -> BenchmarkReport:
-    payload = load_json_object(path)
-    metadata = object_field(payload, "metadata")
-    aggregate_rows = object_list_field(payload, "aggregate")
-    if uses_streaming_profile(metadata, aggregate_rows, "async-bytes"):
-        metadata = {
-            **metadata,
-            "raw_evidence_validation": revalidate_attribution_rows(metadata, aggregate_rows, path.parent),
-        }
-    suite = report_suite(metadata, aggregate_rows)
+    report = load_report(path)
+    metadata = report.metadata
+    aggregate_rows = report.aggregate_rows
+    suite = cast("BenchmarkSuite", report.suite)
     rows = [benchmark_row(suite, row) for row in aggregate_rows]
     validity = validity_summary_from_metadata(metadata, suite, aggregate_rows)
     return BenchmarkReport(
@@ -30,15 +28,8 @@ def load_benchmark_report(path: Path) -> BenchmarkReport:
         aggregate_rows=aggregate_rows,
         metadata=metadata,
         validity=validity,
+        run_rows=report.run_rows,
     )
-
-
-def load_json_object(path: Path) -> JsonObject:
-    value = json.loads(path.read_text())
-    if not isinstance(value, dict):
-        msg = f"{path} must contain a JSON object"
-        raise TypeError(msg)
-    return value
 
 
 def object_field(value: JsonObject, key: str) -> JsonObject:
@@ -46,60 +37,6 @@ def object_field(value: JsonObject, key: str) -> JsonObject:
     if not isinstance(field, dict):
         return {}
     return field
-
-
-def object_list_field(value: JsonObject, key: str) -> list[JsonObject]:
-    field = value.get(key)
-    if not isinstance(field, list):
-        msg = f"JSON field {key!r} must be a list"
-        raise TypeError(msg)
-    rows: list[JsonObject] = []
-    for item in field:
-        if not isinstance(item, dict):
-            msg = f"JSON field {key!r} must contain objects"
-            raise TypeError(msg)
-        rows.append(item)
-    return rows
-
-
-def report_suite(metadata: JsonObject, aggregate_rows: list[JsonObject]) -> BenchmarkSuite:
-    suite = metadata.get("suite")
-    known_suites: dict[str, BenchmarkSuite] = {
-        "requests": "requests",
-        "client-creation": "client-creation",
-        "resource-backpressure": "resource-backpressure",
-        "one-upstream": "one-upstream",
-        "request-builder": "request-builder",
-        "compressed-response": "compressed-response",
-        "response-streaming": "response-streaming",
-        "proxy-connect": "proxy-connect",
-    }
-    if isinstance(suite, str) and suite in known_suites:
-        inferred_suite = known_suites[suite]
-    else:
-        inferred_suite = infer_suite_from_rows(aggregate_rows)
-    return inferred_suite
-
-
-def infer_suite_from_rows(aggregate_rows: list[JsonObject]) -> BenchmarkSuite:
-    first = aggregate_rows[0] if aggregate_rows else {}
-    if "kind" in first and "profile" in first and "ops_s_median" in first:
-        suite: BenchmarkSuite = "request-builder"
-    elif "streams_s_median" in first:
-        suite = "response-streaming"
-    elif "ops_s_median" in first:
-        suite = "client-creation"
-    elif "max_pending_requests" in first:
-        suite = "resource-backpressure"
-    elif "target_scheme" in first and "config" in first and "case" in first:
-        suite = "proxy-connect"
-    elif "profile" in first and "case" in first:
-        suite = "one-upstream"
-    elif "ok_req_s_median" in first:
-        suite = "requests"
-    else:
-        suite = "unknown"
-    return suite
 
 
 def package_versions(metadata: JsonObject) -> dict[str, str]:
@@ -119,21 +56,37 @@ def benchmark_row(suite: BenchmarkSuite, row: JsonObject) -> BenchmarkRow:
         "proxy-connect": proxy_connect_row,
     }
     builder = row_builders.get(suite)
-    if builder is not None:
-        return builder(row)
-    return request_row(row, suite=suite)
+    benchmark = builder(row) if builder is not None else request_row(row, suite=suite)
+    resources = (
+        object_field(object_field(row, "resources"), "client")
+        if suite == "response-streaming" and row.get("profile") in {"lifecycle", "async-bytes"}
+        else row
+    )
+    coverage = resource_coverage_field(resources)
+    unavailable = {name: observation.unavailable_reasons for name, observation in coverage.items()}
+    if resources is not row:
+        for metric, output in (
+            ("rss_bytes", "sampled_peak_rss_bytes_max"),
+            ("threads", "sampled_peak_threads_max"),
+            ("fds", "sampled_peak_fds_max"),
+        ):
+            reasons = object_field(resources, "unavailable").get(metric)
+            if isinstance(reasons, list) and all(isinstance(reason, str) for reason in reasons):
+                unavailable[output] = tuple(reasons)
+    return replace(benchmark, resource_coverage=coverage, resource_unavailable_reasons=unavailable)
 
 
 def request_row(row: JsonObject, *, suite: BenchmarkSuite = "requests") -> BenchmarkRow:
+    identity = aggregate_identity(suite, row)
     mode = str_field(row, "mode")
     client = str_field(row, "client")
     scenario = str_field(row, "scenario")
     concurrency = int_field(row, "concurrency")
-    request_limit = int_field(row, "request_limit", int_field(row, "max_connections"))
+    request_limit = int_field(row, "request_limit")
     return BenchmarkRow(
         suite=suite,
-        identity=(mode, client, scenario, str(concurrency), str(request_limit)),
-        group=(mode, scenario, str(concurrency), str(request_limit)),
+        identity=identity,
+        group=comparison_group(identity),
         label=f"{mode} / {client} / {scenario} / conc={concurrency} / limit={request_limit}",
         mode=mode,
         client=client,
@@ -144,13 +97,14 @@ def request_row(row: JsonObject, *, suite: BenchmarkSuite = "requests") -> Bench
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=int_field(row, "warmup_errors_total"),
         error_rate_percent=optional_float_field(row, "error_rate_percent"),
-        rss_mb=optional_float_field(row, "rss_mb_max"),
-        threads=optional_int_field(row, "threads_max"),
-        fds=optional_int_field(row, "fds_max"),
+        rss_mb=resource_float_field(row, "rss_mb_max"),
+        threads=resource_int_field(row, "threads_max"),
+        fds=resource_int_field(row, "fds_max"),
     )
 
 
 def client_creation_row(row: JsonObject) -> BenchmarkRow:
+    identity = aggregate_identity("client-creation", row)
     mode = str_field(row, "mode")
     client = str_field(row, "client")
     scenario = str_field(row, "scenario")
@@ -158,8 +112,8 @@ def client_creation_row(row: JsonObject) -> BenchmarkRow:
     iterations = int_field(row, "iterations")
     return BenchmarkRow(
         suite="client-creation",
-        identity=(mode, client, scenario, str(client_count), str(iterations)),
-        group=(mode, scenario, str(client_count), str(iterations)),
+        identity=identity,
+        group=comparison_group(identity),
         label=f"{mode} / {client} / {scenario} / clients={client_count} / iters={iterations}",
         mode=mode,
         client=client,
@@ -170,13 +124,14 @@ def client_creation_row(row: JsonObject) -> BenchmarkRow:
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=0,
         error_rate_percent=None,
-        rss_mb=optional_float_field(row, "peak_rss_delta_mb_max"),
-        threads=optional_int_field(row, "peak_threads_delta_max"),
-        fds=optional_int_field(row, "peak_fds_delta_max"),
+        rss_mb=resource_float_field(row, "peak_rss_delta_mb_max"),
+        threads=resource_int_field(row, "peak_threads_delta_max"),
+        fds=resource_int_field(row, "peak_fds_delta_max"),
     )
 
 
 def resource_row(row: JsonObject) -> BenchmarkRow:
+    identity = aggregate_identity("resource-backpressure", row)
     mode = str_field(row, "mode")
     client = str_field(row, "client", "foghttp")
     scenario = str_field(row, "scenario")
@@ -187,8 +142,8 @@ def resource_row(row: JsonObject) -> BenchmarkRow:
     origin_label = "-" if origin_limit is None else str(origin_limit)
     return BenchmarkRow(
         suite="resource-backpressure",
-        identity=(mode, client, scenario, str(concurrency), str(request_limit), origin_label, str(pending_limit)),
-        group=(mode, scenario, str(concurrency), str(request_limit), origin_label, str(pending_limit)),
+        identity=identity,
+        group=comparison_group(identity),
         label=(
             f"{mode} / {client} / {scenario} / conc={concurrency} / active={request_limit} "
             f"/ origin={origin_label} / pending={pending_limit}"
@@ -202,24 +157,24 @@ def resource_row(row: JsonObject) -> BenchmarkRow:
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=int_field(row, "warmup_errors_total"),
         error_rate_percent=optional_float_field(row, "error_rate_percent"),
-        rss_mb=optional_float_field(row, "rss_mb_max"),
-        threads=optional_int_field(row, "threads_max"),
-        fds=optional_int_field(row, "fds_max"),
+        rss_mb=resource_float_field(row, "rss_mb_max"),
+        threads=resource_int_field(row, "threads_max"),
+        fds=resource_int_field(row, "fds_max"),
     )
 
 
 def one_upstream_row(row: JsonObject) -> BenchmarkRow:
+    identity = aggregate_identity("one-upstream", row)
     mode = str_field(row, "mode")
     client = str_field(row, "client")
     case = str_field(row, "case")
     group = str_field(row, "group")
     profile = str_field(row, "profile")
     concurrency = int_field(row, "concurrency")
-    request_limit = int_field(row, "request_limit")
     return BenchmarkRow(
         suite="one-upstream",
-        identity=(mode, client, group, case, str(concurrency), str(request_limit)),
-        group=(mode, group, case, str(concurrency), str(request_limit)),
+        identity=identity,
+        group=comparison_group(identity),
         label=f"{mode} / {client} / {group} / {case} / {profile} / conc={concurrency}",
         mode=mode,
         client=client,
@@ -230,24 +185,24 @@ def one_upstream_row(row: JsonObject) -> BenchmarkRow:
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=int_field(row, "warmup_errors_total"),
         error_rate_percent=optional_float_field(row, "error_rate_percent"),
-        rss_mb=optional_float_field(row, "rss_mb_max"),
-        threads=optional_int_field(row, "threads_max"),
-        fds=optional_int_field(row, "fds_max"),
+        rss_mb=resource_float_field(row, "rss_mb_max"),
+        threads=resource_int_field(row, "threads_max"),
+        fds=resource_int_field(row, "fds_max"),
     )
 
 
 def request_builder_row(row: JsonObject) -> BenchmarkRow:
+    identity = aggregate_identity("request-builder", row)
     mode = str_field(row, "mode")
     client = str_field(row, "client")
     case = str_field(row, "case")
     group = str_field(row, "group")
     kind = str_field(row, "kind")
     profile = str_field(row, "profile")
-    iterations = int_field(row, "iterations")
     return BenchmarkRow(
         suite="request-builder",
-        identity=(mode, client, kind, group, case, str(iterations)),
-        group=(mode, kind, group, case, str(iterations)),
+        identity=identity,
+        group=comparison_group(identity),
         label=f"{mode} / {client} / {kind} / {group} / {case} / {profile}",
         mode=mode,
         client=client,
@@ -258,13 +213,14 @@ def request_builder_row(row: JsonObject) -> BenchmarkRow:
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=0,
         error_rate_percent=None,
-        rss_mb=optional_float_field(row, "rss_mb_max"),
-        threads=optional_int_field(row, "threads_max"),
-        fds=optional_int_field(row, "fds_max"),
+        rss_mb=resource_float_field(row, "rss_mb_max"),
+        threads=resource_int_field(row, "threads_max"),
+        fds=resource_int_field(row, "fds_max"),
     )
 
 
 def response_streaming_row(row: JsonObject) -> BenchmarkRow:
+    identity = aggregate_identity("response-streaming", row)
     mode = str_field(row, "mode")
     client = str_field(row, "client")
     case = str_field(row, "case")
@@ -272,55 +228,21 @@ def response_streaming_row(row: JsonObject) -> BenchmarkRow:
     consume = str_field(row, "consume")
     concurrency = int_field(row, "concurrency")
     request_limit = int_field(row, "request_limit")
-    lifecycle_identity = (
-        ("lifecycle", json.dumps(row.get("configuration", {}), sort_keys=True))
-        if row.get("profile") == "lifecycle"
-        else ()
-    )
-    attribution_identity = (
-        ("async-bytes", str_field(row, "condition_fingerprint"), str_field(row, "primary_metric"))
-        if row.get("profile") == "async-bytes"
-        else ()
-    )
-    metric_scope = (
-        (str_field(row, "throughput_scope", "legacy-observed-v1"), str_field(row, "timing_scope", "legacy-sampler-v1"))
-        if "throughput_scope" in row or "timing_scope" in row
-        else ()
-    )
     resources = object_field(object_field(row, "resources"), "client")
-    lifecycle_rss = optional_float_field(resources, "sampled_peak_rss_bytes_max")
     is_lifecycle = row.get("profile") in {"lifecycle", "async-bytes"}
+    lifecycle_rss = resource_float_field(resources, "sampled_peak_rss_bytes_max") if is_lifecycle else None
     return BenchmarkRow(
         suite="response-streaming",
-        identity=(
-            mode,
-            client,
-            case,
-            read,
-            consume,
-            str(concurrency),
-            str(request_limit),
-            *lifecycle_identity,
-            *attribution_identity,
-            *metric_scope,
-        ),
-        group=(
-            mode,
-            case,
-            read,
-            consume,
-            str(concurrency),
-            str(request_limit),
-            *lifecycle_identity,
-            *attribution_identity,
-            *metric_scope,
-        ),
+        identity=identity,
+        group=comparison_group(identity),
         label=f"{mode} / {client} / {case} / {read} / {consume} / conc={concurrency} / limit={request_limit}",
         mode=mode,
         client=client,
         scenario=case,
         primary_value=optional_float_field(row, "verified_bytes_s_median")
         if row.get("profile") == "async-bytes"
+        else optional_float_field(row, "ok_streams_s_median")
+        if row.get("profile") == "lifecycle"
         else float_field(row, "ok_streams_s_median"),
         p95_ms=optional_float_field(row, "p95_ms_median"),
         p99_ms=optional_float_field(row, "p99_ms_median"),
@@ -331,17 +253,18 @@ def response_streaming_row(row: JsonObject) -> BenchmarkRow:
         if is_lifecycle and lifecycle_rss is not None
         else None
         if is_lifecycle
-        else optional_float_field(row, "rss_mb_max"),
-        threads=optional_int_field(resources, "sampled_peak_threads_max")
+        else resource_float_field(row, "rss_mb_max"),
+        threads=resource_int_field(resources, "sampled_peak_threads_max")
         if is_lifecycle
-        else optional_int_field(row, "threads_max"),
-        fds=optional_int_field(resources, "sampled_peak_fds_max")
+        else resource_int_field(row, "threads_max"),
+        fds=resource_int_field(resources, "sampled_peak_fds_max")
         if is_lifecycle
-        else optional_int_field(row, "fds_max"),
+        else resource_int_field(row, "fds_max"),
     )
 
 
 def proxy_connect_row(row: JsonObject) -> BenchmarkRow:
+    identity = aggregate_identity("proxy-connect", row)
     mode = str_field(row, "mode")
     client = str_field(row, "client")
     case = str_field(row, "case")
@@ -352,8 +275,8 @@ def proxy_connect_row(row: JsonObject) -> BenchmarkRow:
     request_limit = int_field(row, "request_limit")
     return BenchmarkRow(
         suite="proxy-connect",
-        identity=(mode, client, case, target_scheme, config, lifecycle, str(concurrency), str(request_limit)),
-        group=(mode, case, target_scheme, config, lifecycle, str(concurrency), str(request_limit)),
+        identity=identity,
+        group=comparison_group(identity),
         label=(
             f"{mode} / {client} / {case} / {target_scheme} / {config} / {lifecycle} "
             f"/ conc={concurrency} / limit={request_limit}"
@@ -367,54 +290,47 @@ def proxy_connect_row(row: JsonObject) -> BenchmarkRow:
         errors_total=int_field(row, "errors_total"),
         warmup_errors_total=int_field(row, "warmup_errors_total"),
         error_rate_percent=optional_float_field(row, "error_rate_percent"),
-        rss_mb=optional_float_field(row, "rss_mb_max"),
-        threads=optional_int_field(row, "threads_max"),
-        fds=optional_int_field(row, "fds_max"),
+        rss_mb=resource_float_field(row, "rss_mb_max"),
+        threads=resource_int_field(row, "threads_max"),
+        fds=resource_int_field(row, "fds_max"),
     )
 
 
-def str_field(row: JsonObject, key: str, default: str = "") -> str:
-    value = row.get(key, default)
-    return value if isinstance(value, str) else str(value)
+def str_field(row: JsonObject, key: str, default: str | None = None) -> str:
+    if key not in row and default is not None:
+        return default
+    return require_string(row.get(key), key)
 
 
-def int_field(row: JsonObject, key: str, default: int = 0) -> int:
-    value = row.get(key, default)
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return default
-    return default
+def int_field(row: JsonObject, key: str) -> int:
+    return require_integer(row.get(key), key)
 
 
 def optional_int_field(row: JsonObject, key: str) -> int | None:
-    if row.get(key) is None:
-        return None
-    return int_field(row, key)
+    return None if row.get(key) is None else int_field(row, key)
 
 
-def float_field(row: JsonObject, key: str, default: float = 0.0) -> float:
-    value = row.get(key, default)
-    if isinstance(value, bool):
-        return float(value)
-    if isinstance(value, int | float):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return default
-    return default
+def float_field(row: JsonObject, key: str) -> float:
+    return require_number(row.get(key), key)
 
 
 def optional_float_field(row: JsonObject, key: str) -> float | None:
-    if row.get(key) is None:
+    return None if row.get(key) is None else float_field(row, key)
+
+
+def resource_float_field(row: JsonObject, key: str) -> float | None:
+    value = row.get(key)
+    return None if value is None else require_number(value, key, minimum=None)
+
+
+def resource_int_field(row: JsonObject, key: str) -> int | None:
+    value = row.get(key)
+    if value is None:
         return None
-    return float_field(row, key)
+    if type(value) is int:
+        return value
+    number = require_number(value, key, minimum=None)
+    if number.is_integer():
+        return int(number)
+    msg = f"{key} must be an integer or null"
+    raise ValueError(msg)

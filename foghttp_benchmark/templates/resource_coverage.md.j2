@@ -1,0 +1,17 @@
+## Resource observation coverage
+
+Missing values are `unavailable`, not measured zero.
+Counts describe available repeat observations, not OS sampling frequency or
+complete memory bounds. A partial maximum only covers the available repeats.
+
+| mode | client | scenario/case | metric | observed maximum | available / expected | unavailable reasons |
+| --- | --- | --- | --- | ---: | ---: | --- |
+{% for row in aggregate %}
+{% if row.resource_coverage is defined and row.resource_coverage %}
+{% for metric, coverage in row.resource_coverage.items() %}
+| {{ row.mode }} | {{ row.client }} | {{ (row.scenario if row.scenario is defined else row.case)|markdown_table_cell }} | `{{ metric }}` | {{ row[metric] if row[metric] is not none else "unavailable" }} | {{ coverage.available }} / {{ coverage.expected }} | {{ coverage.unavailable_reasons|join("; ")|markdown_table_cell if coverage.unavailable_reasons else "-" }} |
+{% endfor %}
+{% else %}
+| {{ row.mode }} | {{ row.client }} | {{ (row.scenario if row.scenario is defined else row.case)|markdown_table_cell }} | unknown | see recorded aggregate | unknown | coverage not recorded |
+{% endif %}
+{% endfor %}

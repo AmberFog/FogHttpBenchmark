@@ -38,13 +38,14 @@ __all__ = (
 )
 
 from pathlib import Path
+from typing import Final
 
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
 
-ASYNC_MODE = "async"
-SYNC_MODE = "sync"
+ASYNC_MODE: Final = "async"
+SYNC_MODE: Final = "sync"
 
 DEFAULT_CLIENTS = "foghttp,httpx,httpxyz,aiohttp,zapros,zapros-pyreqwest"
 DEFAULT_MODES = ASYNC_MODE

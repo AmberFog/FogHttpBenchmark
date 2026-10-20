@@ -6,40 +6,14 @@ __all__ = (
     "validate_request_builder_args",
     "validate_resource_backpressure_args",
     "validate_streaming_args",
-    "validate_suite",
 )
 
-from foghttp_benchmark.constants import (
-    CLIENT_CREATION_SUITE,
-    COMPRESSED_RESPONSE_SUITE,
-    ONE_UPSTREAM_SUITE,
-    PROXY_CONNECT_SUITE,
-    REQUEST_BUILDER_SUITE,
-    REQUESTS_SUITE,
-    RESOURCE_BACKPRESSURE_SUITE,
-    RESPONSE_STREAMING_SUITE,
-)
 from foghttp_benchmark.models import BenchmarkArgs, Scenario
 from foghttp_benchmark.one_upstream.models import OneUpstreamCase
 from foghttp_benchmark.proxy_connect.models import ProxyConnectCase
 from foghttp_benchmark.request_builder.models import RequestBuilderCase
 from foghttp_benchmark.resource.scenarios import ResourceCase
 from foghttp_benchmark.streaming.models import StreamingCase
-
-
-def validate_suite(suite: str) -> None:
-    if suite not in {
-        REQUESTS_SUITE,
-        CLIENT_CREATION_SUITE,
-        RESOURCE_BACKPRESSURE_SUITE,
-        ONE_UPSTREAM_SUITE,
-        PROXY_CONNECT_SUITE,
-        REQUEST_BUILDER_SUITE,
-        COMPRESSED_RESPONSE_SUITE,
-        RESPONSE_STREAMING_SUITE,
-    }:
-        msg = f"unknown benchmark suite: {suite}"
-        raise ValueError(msg)
 
 
 def validate_request_benchmark_args(

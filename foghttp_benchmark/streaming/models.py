@@ -1,5 +1,7 @@
 __all__ = (
     "AsyncStreamingAdapter",
+    "AsyncStreamingClientFactory",
+    "AsyncStreamingClientSpec",
     "StreamConsumeMode",
     "StreamReadMode",
     "StreamingAggregateRow",
@@ -11,13 +13,17 @@ __all__ = (
     "StreamingOutcome",
     "StreamingResult",
     "SyncStreamingAdapter",
+    "SyncStreamingClientFactory",
+    "SyncStreamingClientSpec",
 )
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeAlias
 
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.models import ClientStats
+from foghttp_benchmark.resource_metrics import ResourceCoverage
 
 
 StreamConsumeMode: TypeAlias = Literal["all", "first-chunk", "first-line"]
@@ -60,6 +66,9 @@ class StreamingOutcome:
 
 
 class AsyncStreamingAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["async"]: ...
+
     async def stream(self, case: StreamingCase, url: str) -> StreamingOutcome: ...
 
     async def close(self) -> None: ...
@@ -68,6 +77,9 @@ class AsyncStreamingAdapter(Protocol):
 
 
 class SyncStreamingAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["sync"]: ...
+
     def stream(self, case: StreamingCase, url: str) -> StreamingOutcome: ...
 
     def close(self) -> None: ...
@@ -75,17 +87,26 @@ class SyncStreamingAdapter(Protocol):
     def stats(self) -> ClientStats | None: ...
 
 
-StreamingClientFactory: TypeAlias = Callable[
-    [StreamingClientConfig],
-    AsyncStreamingAdapter | SyncStreamingAdapter,
-]
+AsyncStreamingClientFactory: TypeAlias = Callable[[StreamingClientConfig], AsyncStreamingAdapter]
+SyncStreamingClientFactory: TypeAlias = Callable[[StreamingClientConfig], SyncStreamingAdapter]
+StreamingClientFactory: TypeAlias = AsyncStreamingClientFactory | SyncStreamingClientFactory
 
 
 @dataclass(frozen=True, slots=True)
-class StreamingClientSpec:
+class AsyncStreamingClientSpec:
     name: str
-    mode: str
-    factory: StreamingClientFactory
+    factory: AsyncStreamingClientFactory
+    mode: Literal["async"] = field(default=ASYNC_MODE, init=False)
+
+
+@dataclass(frozen=True, slots=True)
+class SyncStreamingClientSpec:
+    name: str
+    factory: SyncStreamingClientFactory
+    mode: Literal["sync"] = field(default=SYNC_MODE, init=False)
+
+
+StreamingClientSpec: TypeAlias = AsyncStreamingClientSpec | SyncStreamingClientSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,9 +191,9 @@ class StreamingAggregateRow:
     p99_ms_median: float
     first_chunk_p50_ms_median: float | None
     first_chunk_p95_ms_median: float | None
-    rss_mb_max: float
-    threads_max: int
-    fds_max: int
+    rss_mb_max: float | None
+    threads_max: int | None
+    fds_max: int | None
     final_active_requests_max: int | None
     final_response_body_closed_max: int | None
     final_response_body_reuse_eligible_max: int | None
@@ -189,3 +210,4 @@ class StreamingAggregateRow:
     verified_eof_chunks_total: int = 0
     throughput_scope: str = "verified-eof-v2"
     timing_scope: str = "load-only-v2"
+    resource_coverage: ResourceCoverage = field(default_factory=dict)

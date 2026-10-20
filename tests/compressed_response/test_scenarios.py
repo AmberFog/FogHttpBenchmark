@@ -3,13 +3,13 @@ import zlib
 
 import brotli
 
+from foghttp_benchmark.application.composition import get_suite
 from foghttp_benchmark.compressed_response.payloads import (
     COMPRESSED_RESPONSE_BODIES,
     HIGH_RATIO_BODY,
 )
 from foghttp_benchmark.compressed_response.scenarios import compressed_response_scenarios
 from foghttp_benchmark.constants import COMPRESSED_RESPONSE_SUITE
-from foghttp_benchmark.validation import validate_suite
 
 
 def test_compressed_response_payloads_decode_to_expected_bodies() -> None:
@@ -33,4 +33,4 @@ def test_compressed_response_scenarios_expose_decoded_lengths() -> None:
 
 
 def test_compressed_response_suite_is_known() -> None:
-    validate_suite(COMPRESSED_RESPONSE_SUITE)
+    get_suite(COMPRESSED_RESPONSE_SUITE)

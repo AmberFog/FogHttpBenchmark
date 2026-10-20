@@ -1,4 +1,6 @@
 __all__ = (
+    "AsyncClientFactory",
+    "AsyncClientSpec",
     "BenchmarkArgs",
     "ClientConfig",
     "ClientCreationResult",
@@ -12,11 +14,15 @@ __all__ = (
     "ResponseOutcome",
     "RunResult",
     "Scenario",
+    "SyncClientFactory",
+    "SyncClientSpec",
 )
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, TypeAlias
+
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 
 
 if TYPE_CHECKING:
@@ -72,7 +78,9 @@ class ClientConfig:
     total_timeout_s: float = 30.0
 
 
-ClientFactory: TypeAlias = Callable[[ClientConfig], "AsyncClientAdapter | SyncClientAdapter"]
+AsyncClientFactory: TypeAlias = Callable[[ClientConfig], "AsyncClientAdapter"]
+SyncClientFactory: TypeAlias = Callable[[ClientConfig], "SyncClientAdapter"]
+ClientFactory: TypeAlias = AsyncClientFactory | SyncClientFactory
 ClientStatKey: TypeAlias = Literal[
     "active_requests",
     "pending_requests",
@@ -104,10 +112,20 @@ JsonObject: TypeAlias = dict[str, object]
 
 
 @dataclass(frozen=True)
-class ClientSpec:
+class AsyncClientSpec:
     name: str
-    mode: str
-    factory: ClientFactory
+    factory: AsyncClientFactory
+    mode: Literal["async"] = field(default=ASYNC_MODE, init=False)
+
+
+@dataclass(frozen=True)
+class SyncClientSpec:
+    name: str
+    factory: SyncClientFactory
+    mode: Literal["sync"] = field(default=SYNC_MODE, init=False)
+
+
+ClientSpec: TypeAlias = AsyncClientSpec | SyncClientSpec
 
 
 @dataclass(frozen=True)

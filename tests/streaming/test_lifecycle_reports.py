@@ -5,9 +5,11 @@ from pathlib import Path
 
 import pytest
 
+from foghttp_benchmark.compare.loading import load_benchmark_report
 from foghttp_benchmark.models import BenchmarkArgs, JsonObject
+from foghttp_benchmark.streaming.lifecycle_aggregation import aggregate_lifecycle_results
 from foghttp_benchmark.streaming.lifecycle_models import LifecycleCase, LifecycleConfig
-from foghttp_benchmark.streaming.lifecycle_reports import aggregate_lifecycle_results, write_lifecycle_reports
+from foghttp_benchmark.streaming.lifecycle_reports import write_lifecycle_reports
 
 
 CLIENT_RSS_BYTES = 100
@@ -203,6 +205,19 @@ def test_partial_failures_are_retained_and_block_validity(tmp_path: Path, fault:
     assert payload["runs"][0]["stderr_tail"] == "retained diagnostic"
     if fault == "unknown-control-error":
         assert payload["aggregate"][0]["expected_aborts_total"] == 0
+
+
+def test_failed_lifecycle_report_remains_readable_without_fabricating_throughput(tmp_path: Path) -> None:
+    broken = result()
+    broken["client_report"] = None
+    broken["report_path"] = None
+    write_results(tmp_path, [broken])
+
+    report = load_benchmark_report(tmp_path / "latest.json")
+
+    assert report.rows[0].primary_value is None
+    assert report.validity.status == "invalid"
+    assert not report.validity.can_compare
 
 
 def test_missing_cases_and_pid_reuse_are_not_accepted(tmp_path: Path) -> None:

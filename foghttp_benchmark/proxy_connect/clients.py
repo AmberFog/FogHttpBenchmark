@@ -2,7 +2,7 @@ __all__ = ("available_proxy_connect_clients",)
 
 import importlib
 import ssl
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 from foghttp_benchmark.clients.httpxyz_import import import_httpxyz
 from foghttp_benchmark.clients.utils import StatsProvider, json_has_keys, stats_from_client
@@ -10,11 +10,12 @@ from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.models import ClientStats
 from foghttp_benchmark.proxy_connect.models import (
     AsyncProxyConnectAdapter,
+    AsyncProxyConnectClientSpec,
     ProxyConnectCase,
     ProxyConnectClientConfig,
-    ProxyConnectClientFactory,
     ProxyConnectClientSpec,
     SyncProxyConnectAdapter,
+    SyncProxyConnectClientSpec,
 )
 
 
@@ -41,6 +42,8 @@ class _SyncClient(Protocol):
 
 
 class _AsyncReusedProxyAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     def __init__(self, client: _AsyncClient) -> None:
         self.client = client
 
@@ -56,6 +59,8 @@ class _AsyncReusedProxyAdapter:
 
 
 class _SyncReusedProxyAdapter:
+    mode: Literal["sync"] = SYNC_MODE
+
     def __init__(self, client: _SyncClient) -> None:
         self.client = client
 
@@ -71,6 +76,8 @@ class _SyncReusedProxyAdapter:
 
 
 class _AsyncColdProxyAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     def __init__(self, factory: "AsyncClientBuilder") -> None:
         self.factory = factory
 
@@ -90,6 +97,8 @@ class _AsyncColdProxyAdapter:
 
 
 class _SyncColdProxyAdapter:
+    mode: Literal["sync"] = SYNC_MODE
+
     def __init__(self, factory: "SyncClientBuilder") -> None:
         self.factory = factory
 
@@ -120,28 +129,24 @@ def available_proxy_connect_clients(
     requested_clients: list[str],
     requested_modes: list[str],
 ) -> tuple[list[ProxyConnectClientSpec], dict[str, str]]:
-    factories: dict[str, dict[str, ProxyConnectClientFactory]] = {
-        ASYNC_MODE: {
-            "foghttp": make_foghttp_async,
-            "httpx": make_httpx_async,
-            "httpxyz": make_httpxyz_async,
-        },
-        SYNC_MODE: {
-            "foghttp": make_foghttp_sync,
-            "httpx": make_httpx_sync,
-            "httpxyz": make_httpxyz_sync,
-        },
-    }
+    specs: tuple[ProxyConnectClientSpec, ...] = (
+        AsyncProxyConnectClientSpec(name="foghttp", factory=make_foghttp_async),
+        AsyncProxyConnectClientSpec(name="httpx", factory=make_httpx_async),
+        AsyncProxyConnectClientSpec(name="httpxyz", factory=make_httpxyz_async),
+        SyncProxyConnectClientSpec(name="foghttp", factory=make_foghttp_sync),
+        SyncProxyConnectClientSpec(name="httpx", factory=make_httpx_sync),
+        SyncProxyConnectClientSpec(name="httpxyz", factory=make_httpxyz_sync),
+    )
+    specs_by_identity: dict[tuple[str, str], ProxyConnectClientSpec] = {(spec.mode, spec.name): spec for spec in specs}
     clients: list[ProxyConnectClientSpec] = []
     skipped: dict[str, str] = {}
     for mode in requested_modes:
-        mode_factories = factories.get(mode)
-        if mode_factories is None:
+        if mode not in {ASYNC_MODE, SYNC_MODE}:
             skipped[f"{mode}:*"] = "unknown mode"
             continue
         for name in requested_clients:
-            factory = mode_factories.get(name)
-            if factory is None:
+            spec = specs_by_identity.get((mode, name))
+            if spec is None:
                 skipped[f"{mode}:{name}"] = "proxy-connect suite requires comparable client-level proxy support"
                 continue
             try:
@@ -149,7 +154,7 @@ def available_proxy_connect_clients(
             except Exception as exc:  # noqa: BLE001
                 skipped[f"{mode}:{name}"] = f"{type(exc).__name__}: {exc}"
                 continue
-            clients.append(ProxyConnectClientSpec(name=name, mode=mode, factory=factory))
+            clients.append(spec)
     return clients, skipped
 
 

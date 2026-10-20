@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from foghttp_benchmark.application.composition import get_suite
 from foghttp_benchmark.constants import RESOURCE_BACKPRESSURE_SUITE
 from foghttp_benchmark.isolation.models import ChildProcessResult, ChildResourcePeaks
 from foghttp_benchmark.isolation.reports import write_isolation_report
@@ -149,7 +150,13 @@ def test_resource_writer_and_isolated_parent_keep_warmup_error_types(tmp_path: P
     )
     parent_dir = tmp_path / "parent"
 
-    write_isolation_report(benchmark_args(parent_dir), [child], {}, child_cooldown_s=0.0)
+    write_isolation_report(
+        benchmark_args(parent_dir),
+        [child],
+        {},
+        finalizer=get_suite("resource-backpressure").finalize_report,
+        child_cooldown_s=0.0,
+    )
 
     parent_payload = json.loads((parent_dir / "latest.json").read_text())
     for payload in (child_payload, parent_payload):

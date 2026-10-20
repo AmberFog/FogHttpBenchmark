@@ -8,7 +8,7 @@ __all__ = (
 import time
 from typing import TYPE_CHECKING
 
-from foghttp_benchmark.creation.client_io import close_async_client, create_async_client
+from foghttp_benchmark.creation.client_io import close_async_client
 from foghttp_benchmark.creation.constants import (
     CREATE_CLOSE_SCENARIO,
     CREATE_FIRST_REQUEST_SCENARIO,
@@ -18,7 +18,7 @@ from foghttp_benchmark.creation.constants import (
 from foghttp_benchmark.creation.measurement import elapsed_ms, increment, measure_creation_operation
 from foghttp_benchmark.creation.models import CreationSamples
 from foghttp_benchmark.load import outcome_matches
-from foghttp_benchmark.models import ClientConfig, ClientCreationResult, ClientSpec, LoadResult, Scenario
+from foghttp_benchmark.models import AsyncClientSpec, ClientConfig, ClientCreationResult, LoadResult, Scenario
 from foghttp_benchmark.resources import ResourceSnapshot, take_resource_snapshot
 
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 async def run_async_create_close(
-    spec: ClientSpec,
+    spec: AsyncClientSpec,
     config: ClientConfig,
     iterations: int,
     repeat: int,
@@ -40,7 +40,7 @@ async def run_async_create_close(
         for _ in range(iterations):
             started = time.perf_counter_ns()
             try:
-                client = create_async_client(spec, config)
+                client = spec.factory(config)
                 peak_snapshot = take_resource_snapshot()
                 close_started = time.perf_counter_ns()
                 await close_async_client(client)
@@ -62,7 +62,7 @@ async def run_async_create_close(
 
 
 async def run_async_create_first_request(
-    spec: ClientSpec,
+    spec: AsyncClientSpec,
     config: ClientConfig,
     scenario: Scenario,
     url: str,
@@ -79,7 +79,7 @@ async def run_async_create_first_request(
             client: AsyncClientAdapter | None = None
             started = time.perf_counter_ns()
             try:
-                client = create_async_client(spec, config)
+                client = spec.factory(config)
                 outcome = await client.request(scenario, url)
                 if not outcome_matches(scenario, outcome):
                     increment(errors, "check_failed")
@@ -108,7 +108,7 @@ async def run_async_create_first_request(
 
 
 async def run_async_reused_request(
-    spec: ClientSpec,
+    spec: AsyncClientSpec,
     config: ClientConfig,
     scenario: Scenario,
     url: str,
@@ -123,7 +123,7 @@ async def run_async_reused_request(
         peak_snapshot: ResourceSnapshot | None = None
         client: AsyncClientAdapter | None = None
         try:
-            client = create_async_client(spec, config)
+            client = spec.factory(config)
             await client.request(scenario, url)
             for _ in range(iterations):
                 started = time.perf_counter_ns()
@@ -155,7 +155,7 @@ async def run_async_reused_request(
 
 
 async def run_async_many_clients(
-    spec: ClientSpec,
+    spec: AsyncClientSpec,
     config: ClientConfig,
     client_count: int,
     repeat: int,
@@ -169,7 +169,7 @@ async def run_async_many_clients(
         try:
             for _ in range(client_count):
                 started = time.perf_counter_ns()
-                clients.append(create_async_client(spec, config))
+                clients.append(spec.factory(config))
                 create_latencies.append(elapsed_ms(started))
             peak_snapshot = take_resource_snapshot()
         except Exception as exc:  # noqa: BLE001

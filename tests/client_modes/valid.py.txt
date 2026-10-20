@@ -1,0 +1,98 @@
+from typing import assert_type
+
+from foghttp_benchmark.clients.base import AsyncClientAdapter, SyncClientAdapter
+from foghttp_benchmark.clients.httpx_client import make_httpx_async, make_httpx_sync
+from foghttp_benchmark.models import AsyncClientSpec, SyncClientSpec, ClientSpec, ClientConfig
+from foghttp_benchmark.one_upstream import clients as upstream
+from foghttp_benchmark.one_upstream.models import (
+    AsyncOneUpstreamAdapter,
+    SyncOneUpstreamAdapter,
+    AsyncOneUpstreamClientSpec,
+    SyncOneUpstreamClientSpec,
+    OneUpstreamClientSpec,
+    OneUpstreamClientConfig,
+)
+from foghttp_benchmark.proxy_connect import clients as proxy
+from foghttp_benchmark.proxy_connect.models import (
+    AsyncProxyConnectAdapter,
+    SyncProxyConnectAdapter,
+    AsyncProxyConnectClientSpec,
+    SyncProxyConnectClientSpec,
+    ProxyConnectClientSpec,
+    ProxyConnectClientConfig,
+)
+from foghttp_benchmark.request_builder import clients as builder
+from foghttp_benchmark.request_builder.models import (
+    AsyncRequestBuilderAdapter,
+    SyncRequestBuilderAdapter,
+    AsyncRequestBuilderClientSpec,
+    SyncRequestBuilderClientSpec,
+    RequestBuilderClientSpec,
+    RequestBuilderClientConfig,
+)
+from foghttp_benchmark.streaming import factories as streaming
+from foghttp_benchmark.streaming.models import (
+    AsyncStreamingAdapter,
+    SyncStreamingAdapter,
+    AsyncStreamingClientSpec,
+    SyncStreamingClientSpec,
+    StreamingClientSpec,
+    StreamingClientConfig,
+)
+
+
+ordinary_specs: list[ClientSpec] = [
+    AsyncClientSpec("httpx", make_httpx_async),
+    SyncClientSpec("httpx", make_httpx_sync),
+]
+streaming_specs: list[StreamingClientSpec] = [
+    AsyncStreamingClientSpec("httpx", streaming.make_httpx_async),
+    SyncStreamingClientSpec("httpx", streaming.make_httpx_sync),
+]
+upstream_specs: list[OneUpstreamClientSpec] = [
+    AsyncOneUpstreamClientSpec("httpx", upstream.make_httpx_async),
+    SyncOneUpstreamClientSpec("httpx", upstream.make_httpx_sync),
+]
+proxy_specs: list[ProxyConnectClientSpec] = [
+    AsyncProxyConnectClientSpec("httpx", proxy.make_httpx_async),
+    SyncProxyConnectClientSpec("httpx", proxy.make_httpx_sync),
+]
+builder_specs: list[RequestBuilderClientSpec] = [
+    AsyncRequestBuilderClientSpec("httpx", builder.make_httpx_async),
+    SyncRequestBuilderClientSpec("httpx", builder.make_httpx_sync),
+]
+
+
+def ordinary_mode(spec: ClientSpec, config: ClientConfig) -> None:
+    if spec.mode == "async":
+        assert_type(spec.factory(config), AsyncClientAdapter)
+    else:
+        assert_type(spec.factory(config), SyncClientAdapter)
+
+
+def streaming_mode(spec: StreamingClientSpec, config: StreamingClientConfig) -> None:
+    if spec.mode == "async":
+        assert_type(spec.factory(config), AsyncStreamingAdapter)
+    else:
+        assert_type(spec.factory(config), SyncStreamingAdapter)
+
+
+def upstream_mode(spec: OneUpstreamClientSpec, config: OneUpstreamClientConfig) -> None:
+    if spec.mode == "async":
+        assert_type(spec.factory(config), AsyncOneUpstreamAdapter)
+    else:
+        assert_type(spec.factory(config), SyncOneUpstreamAdapter)
+
+
+def proxy_mode(spec: ProxyConnectClientSpec, config: ProxyConnectClientConfig) -> None:
+    if spec.mode == "async":
+        assert_type(spec.factory(config), AsyncProxyConnectAdapter)
+    else:
+        assert_type(spec.factory(config), SyncProxyConnectAdapter)
+
+
+def builder_mode(spec: RequestBuilderClientSpec, config: RequestBuilderClientConfig) -> None:
+    if spec.mode == "async":
+        assert_type(spec.factory(config), AsyncRequestBuilderAdapter)
+    else:
+        assert_type(spec.factory(config), SyncRequestBuilderAdapter)

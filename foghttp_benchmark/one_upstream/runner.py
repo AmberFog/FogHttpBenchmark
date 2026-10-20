@@ -6,7 +6,6 @@ import inspect
 from queue import Empty, Queue
 import random
 import time
-from typing import cast
 
 from foghttp_benchmark.constants import ASYNC_MODE
 from foghttp_benchmark.one_upstream.clients import client_config_for_case
@@ -27,7 +26,7 @@ from foghttp_benchmark.progress import (
 )
 from foghttp_benchmark.resources import ResourceSampler
 from foghttp_benchmark.run_settling import RunSettlingConfig, settle_after_run
-from foghttp_benchmark.runner import percentile
+from foghttp_benchmark.statistics import percentile
 
 
 async def run_one_upstream_benchmarks(
@@ -127,10 +126,9 @@ async def run_one_upstream_case(
             collect=False,
             progress=progress,
             stage_name=f"Warmup one-upstream load: {label}",
-            mode=spec.mode,
         )
-        started = time.perf_counter()
         async with ResourceSampler() as sampler:
+            started = time.perf_counter()
             load_result = await run_load_with_progress(
                 client,
                 case,
@@ -140,9 +138,8 @@ async def run_one_upstream_case(
                 collect=True,
                 progress=progress,
                 stage_name=f"Measured one-upstream load: {label}",
-                mode=spec.mode,
             )
-        duration = time.perf_counter() - started
+            duration = time.perf_counter() - started
         client_stats = client.stats()
     finally:
         close_result = client.close()
@@ -189,10 +186,9 @@ async def run_load_with_progress(
     collect: bool,
     progress: ProgressReporter | None,
     stage_name: str,
-    mode: str,
 ) -> OneUpstreamStats:
     if requests == 0 or not is_progress_enabled(progress):
-        return await run_one_upstream_load(client, case, base_url, concurrency, requests, collect=collect, mode=mode)
+        return await run_one_upstream_load(client, case, base_url, concurrency, requests, collect=collect)
     with progress_stage(
         progress,
         stage_name,
@@ -207,7 +203,6 @@ async def run_load_with_progress(
             concurrency,
             requests,
             collect=collect,
-            mode=mode,
             progress=progress_step,
         )
 
@@ -220,12 +215,11 @@ async def run_one_upstream_load(
     requests: int,
     *,
     collect: bool,
-    mode: str,
     progress: ProgressStep | None = None,
 ) -> OneUpstreamStats:
     if requests == 0:
         return OneUpstreamStats([], 0, {})
-    if mode == ASYNC_MODE:
+    if client.mode == ASYNC_MODE:
         return await run_async_one_upstream_load(
             client,
             case,
@@ -248,7 +242,7 @@ async def run_one_upstream_load(
 
 
 async def run_async_one_upstream_load(
-    client: AsyncOneUpstreamAdapter | SyncOneUpstreamAdapter,
+    client: AsyncOneUpstreamAdapter,
     case: OneUpstreamCase,
     base_url: str,
     concurrency: int,
@@ -260,7 +254,6 @@ async def run_async_one_upstream_load(
     queue: asyncio.Queue[int] = asyncio.Queue()
     for index in range(requests):
         queue.put_nowait(index)
-    async_client = cast("AsyncOneUpstreamAdapter", client)
 
     async def worker() -> OneUpstreamStats:
         latencies: list[float] = []
@@ -273,7 +266,7 @@ async def run_async_one_upstream_load(
 
             started = time.perf_counter_ns()
             try:
-                if not await async_client.request(case, base_url):
+                if not await client.request(case, base_url):
                     increment(error_types, "check_failed")
             except Exception as exc:  # noqa: BLE001
                 increment(error_types, type(exc).__name__)
@@ -291,7 +284,7 @@ async def run_async_one_upstream_load(
 
 
 def run_sync_one_upstream_load(
-    client: AsyncOneUpstreamAdapter | SyncOneUpstreamAdapter,
+    client: SyncOneUpstreamAdapter,
     case: OneUpstreamCase,
     base_url: str,
     concurrency: int,
@@ -303,7 +296,6 @@ def run_sync_one_upstream_load(
     queue: Queue[int] = Queue()
     for index in range(requests):
         queue.put_nowait(index)
-    sync_client = cast("SyncOneUpstreamAdapter", client)
 
     def worker() -> OneUpstreamStats:
         latencies: list[float] = []
@@ -316,7 +308,7 @@ def run_sync_one_upstream_load(
 
             started = time.perf_counter_ns()
             try:
-                if not sync_client.request(case, base_url):
+                if not client.request(case, base_url):
                     increment(error_types, "check_failed")
             except Exception as exc:  # noqa: BLE001
                 increment(error_types, type(exc).__name__)

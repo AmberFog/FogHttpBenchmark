@@ -9,8 +9,10 @@ __all__ = (
 import codecs
 from collections.abc import AsyncIterator
 import time
+from typing import Literal
 
 from foghttp_benchmark.clients.utils import stats_from_client
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.models import ClientStats
 from foghttp_benchmark.streaming.consume import (
     consume_async_bytes,
@@ -34,6 +36,8 @@ from foghttp_benchmark.streaming.protocols import (
 
 
 class FogHTTPAsyncStreamingAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     def __init__(self, client: AsyncStatsStreamClient) -> None:
         self.client = client
 
@@ -55,6 +59,8 @@ class FogHTTPAsyncStreamingAdapter:
 
 
 class FogHTTPSyncStreamingAdapter:
+    mode: Literal["sync"] = SYNC_MODE
+
     def __init__(self, client: SyncStatsStreamClient) -> None:
         self.client = client
 
@@ -76,6 +82,8 @@ class FogHTTPSyncStreamingAdapter:
 
 
 class HTTPXAsyncStreamingAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     def __init__(self, client: AsyncStreamClient) -> None:
         self.client = client
 
@@ -97,6 +105,8 @@ class HTTPXAsyncStreamingAdapter:
 
 
 class HTTPXSyncStreamingAdapter:
+    mode: Literal["sync"] = SYNC_MODE
+
     def __init__(self, client: SyncStreamClient) -> None:
         self.client = client
 
@@ -118,6 +128,8 @@ class HTTPXSyncStreamingAdapter:
 
 
 class AioHTTPAsyncStreamingAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     def __init__(self, client: AioHTTPClient) -> None:
         self.client = client
 

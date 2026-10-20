@@ -6,6 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from foghttp_benchmark import cli
+from foghttp_benchmark.application import execution
 from foghttp_benchmark.isolation.lifecycle import run_lifecycle_case
 from foghttp_benchmark.streaming.attribution_models import AttributionConfig
 from foghttp_benchmark.streaming.lifecycle_models import LifecycleCase, LifecycleConfig, validate_lifecycle_config
@@ -69,7 +70,7 @@ def test_window_cli_rejects_invalid_limits_before_process_launch(
     value: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(cli, "research_provenance_from_env", lambda **_: {"verified": True})
+    monkeypatch.setattr(execution, "research_provenance_from_env", lambda **_: {"verified": True})
     result = CliRunner().invoke(
         cli.app,
         [

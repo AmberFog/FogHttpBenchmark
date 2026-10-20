@@ -32,5 +32,7 @@
 | mode | client | kind | group | case | profile | iters | ops/s median | baseline ratio | p50 ms | p95 ms | p99 ms | errors | max RSS MB | max threads | max fds | error types |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 {% for row in aggregate %}
-| {{ row.mode }} | {{ row.client }} | {{ row.kind }} | {{ row.group }} | {{ row.case }} | {{ row.profile }} | {{ row.iterations }} | {{ value(row.ops_s_median, 1) }} | {{ value(row.baseline_ratio, 3) }} | {{ value(row.p50_ms_median, 4) }} | {{ value(row.p95_ms_median, 4) }} | {{ value(row.p99_ms_median, 4) }} | {{ row.errors_total }} | {{ value(row.rss_mb_max, 1) }} | {{ row.threads_max }} | {{ row.fds_max }} | `{{ row.error_types }}` |
+| {{ row.mode }} | {{ row.client }} | {{ row.kind }} | {{ row.group }} | {{ row.case }} | {{ row.profile }} | {{ row.iterations }} | {{ value(row.ops_s_median, 1) }} | {{ value(row.baseline_ratio, 3) }} | {{ value(row.p50_ms_median, 4) }} | {{ value(row.p95_ms_median, 4) }} | {{ value(row.p99_ms_median, 4) }} | {{ row.errors_total }} | {{ row.rss_mb_max|resource_value(1) }} | {{ row.threads_max|resource_value(0) }} | {{ row.fds_max|resource_value(0) }} | `{{ row.error_types }}` |
 {% endfor %}
+
+{% include "resource_coverage.md.j2" %}

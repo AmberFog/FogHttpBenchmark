@@ -1,0 +1,30 @@
+from foghttp_benchmark.streaming.attribution_payloads import (
+    AttributionBatch,
+    CpuSnapshot,
+    FinalizedStreamSample,
+    StreamError,
+)
+
+
+def snapshot_producer() -> CpuSnapshot:
+    return {"pid": 1, "probe_started_ns": 1, "probe_finished_typo": 2, "user_s": None, "system_s": None, "reason": None}  # expect: typeddict-item, typeddict-unknown-key
+
+
+def counter_producer() -> CpuSnapshot:
+    return {"pid": 1, "probe_started_ns": 1, "probe_finished_ns": 2, "user_s": "0.1", "system_s": None, "reason": None}  # expect: typeddict-item
+
+
+def sample_consumer(sample: FinalizedStreamSample) -> None:
+    sample["verified_success_bytes"] = 0.5  # expect: typeddict-item
+    sample["bytes_reed"] = 1  # expect: typeddict-unknown-key
+    sample["delivery_samples"][0]["size_bytes"] = "1"  # expect: typeddict-item
+
+
+def batch_consumer(batch: AttributionBatch) -> None:
+    batch["requests"] = "1"  # expect: typeddict-item
+    batch["cpu"]["client"]["total_s"] = "0.1"  # expect: typeddict-item
+    batch["timing"]["load_finished_ns"] = 0.1  # expect: typeddict-item
+
+
+def error_producer() -> StreamError:
+    return {"type": "ReadError"}  # expect: typeddict-item

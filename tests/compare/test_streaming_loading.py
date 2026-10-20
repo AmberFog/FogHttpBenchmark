@@ -25,6 +25,9 @@ def test_compare_loads_response_streaming_report(tmp_path: Path) -> None:
                         "consume": "all",
                         "concurrency": 10,
                         "request_limit": 10,
+                        "requests": 100,
+                        "repeats": 1,
+                        "ok_streams_total": 100,
                         "ok_streams_s_median": EXPECTED_STREAMS_PER_SECOND,
                         "p95_ms_median": 1.2,
                         "p99_ms_median": 2.3,
@@ -36,6 +39,7 @@ def test_compare_loads_response_streaming_report(tmp_path: Path) -> None:
                         "fds_max": 12,
                     },
                 ],
+                "runs": [],
             },
         ),
     )

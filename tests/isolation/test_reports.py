@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from foghttp_benchmark.application.composition import get_suite
 from foghttp_benchmark.constants import (
     BENCHMARK_SEED,
     COMPRESSED_RESPONSE_SUITE,
@@ -21,9 +22,11 @@ from foghttp_benchmark.constants import (
 )
 from foghttp_benchmark.isolation.models import ChildProcessResult, ChildResourcePeaks
 from foghttp_benchmark.isolation.reports import write_isolation_report
+from foghttp_benchmark.measurement_timing import current_timing_scope
 from foghttp_benchmark.models import BenchmarkArgs
 from foghttp_benchmark.reports import write_reports
 from foghttp_benchmark.validity import reports as validity_reports
+from tests.isolation.report_rows import request_aggregate, request_run, streaming_aggregate, streaming_run
 from tests.requests.factories import run_result
 
 
@@ -38,18 +41,22 @@ EXPECTED_MERGED_WARMUP_ERRORS = 2
 
 
 def test_isolation_report_merges_successful_child_reports(tmp_path: Path) -> None:
+    first_aggregate = request_aggregate("foghttp")
+    second_aggregate = request_aggregate("httpx", ok_req_s=90.0)
+    first_run = request_run("foghttp")
+    second_run = request_run("httpx", ok_req_s=90.0)
     first_report = write_child_report(
         tmp_path / "child-1",
         client="foghttp",
-        aggregate=[{"client": "foghttp", "ok_req_s_median": 100.0}],
-        runs=[{"client": "foghttp", "repeat": 1}],
+        aggregate=[first_aggregate],
+        runs=[first_run],
         skipped={},
     )
     second_report = write_child_report(
         tmp_path / "child-2",
         client="httpx",
-        aggregate=[{"client": "httpx", "ok_req_s_median": 90.0}],
-        runs=[{"client": "httpx", "repeat": 1}],
+        aggregate=[second_aggregate],
+        runs=[second_run],
         skipped={"sync:httpx": "not requested by test"},
     )
     args = benchmark_args(tmp_path / "parent")
@@ -62,12 +69,14 @@ def test_isolation_report_merges_successful_child_reports(tmp_path: Path) -> Non
         args,
         results,
         {"async:aiohttp": "unsupported in this suite"},
+        finalizer=get_suite(args.suite).finalize_report,
         child_cooldown_s=CHILD_COOLDOWN_S,
     )
 
     payload = json.loads((tmp_path / "parent" / "latest.json").read_text())
     metadata = payload["metadata"]
     assert metadata["suite"] == REQUESTS_SUITE
+    assert metadata["timing_scope"] == "requests-load-only-v2"
     assert metadata["isolation"]["backend"] == "subprocess"
     assert metadata["isolation"]["scheduler"] == "sequential"
     assert metadata["isolation"]["child_cooldown_s"] == CHILD_COOLDOWN_S
@@ -76,11 +85,8 @@ def test_isolation_report_merges_successful_child_reports(tmp_path: Path) -> Non
         "opened_connection_threshold": RUN_COOLDOWN_OPENED_THRESHOLD,
     }
     assert len(metadata["isolation"]["children"]) == CHILD_COUNT
-    assert payload["aggregate"] == [
-        {"client": "foghttp", "ok_req_s_median": 100.0},
-        {"client": "httpx", "ok_req_s_median": 90.0},
-    ]
-    assert payload["runs"] == [{"client": "foghttp", "repeat": 1}, {"client": "httpx", "repeat": 1}]
+    assert payload["aggregate"] == [first_aggregate, second_aggregate]
+    assert payload["runs"] == [first_run, second_run]
     assert metadata["skipped"] == {
         "async:aiohttp": "unsupported in this suite",
         "sync:httpx": "not requested by test",
@@ -125,6 +131,7 @@ def test_isolation_report_preserves_child_measured_and_warmup_error_types(
         benchmark_args(parent_dir, suite=suite),
         children,
         {},
+        finalizer=get_suite(suite).finalize_report,
         child_cooldown_s=CHILD_COOLDOWN_S,
     )
 
@@ -157,7 +164,13 @@ def test_isolation_report_keeps_failed_child_diagnostics(tmp_path: Path) -> None
         ),
     ]
 
-    write_isolation_report(args, results, {}, child_cooldown_s=CHILD_COOLDOWN_S)
+    write_isolation_report(
+        args,
+        results,
+        {},
+        finalizer=get_suite(args.suite).finalize_report,
+        child_cooldown_s=CHILD_COOLDOWN_S,
+    )
 
     payload = json.loads((tmp_path / "parent" / "latest.json").read_text())
     child = payload["metadata"]["isolation"]["children"][0]
@@ -168,6 +181,129 @@ def test_isolation_report_keeps_failed_child_diagnostics(tmp_path: Path) -> None
     assert payload["metadata"]["validity"]["reasons"][0]["code"] == "isolated_child_failed"
     assert payload["aggregate"] == []
     assert payload["runs"] == []
+
+
+@pytest.mark.parametrize(
+    ("first_scope", "second_scope", "error"),
+    [
+        ("requests-load-only-v2", "requests-sampler-inclusive-v1", "children disagree on timing scope"),
+        ("requests-load-only-v2", None, "Unknown or unsupported timing scope"),
+        (None, None, "Unknown or unsupported timing scope"),
+        ("future-timing-v99", "future-timing-v99", "Unknown or unsupported timing scope"),
+    ],
+)
+def test_isolation_report_rejects_incompatible_or_unknown_timing(
+    tmp_path: Path,
+    first_scope: str | None,
+    second_scope: str | None,
+    error: str,
+) -> None:
+    children = []
+    for sequence, scope in enumerate((first_scope, second_scope), start=1):
+        path = write_child_report(
+            tmp_path / f"child-{sequence}",
+            client="foghttp",
+            aggregate=[],
+            runs=[],
+            skipped={},
+        )
+        payload = json.loads(path.read_text())
+        if scope is None:
+            del payload["metadata"]["timing_scope"]
+        else:
+            payload["metadata"]["timing_scope"] = scope
+        path.write_text(json.dumps(payload))
+        children.append(child_result(sequence, "foghttp", path))
+
+    with pytest.raises(ValueError, match=error):
+        write_isolation_report(
+            benchmark_args(tmp_path / "parent"),
+            children,
+            {},
+            finalizer=get_suite("requests").finalize_report,
+            child_cooldown_s=CHILD_COOLDOWN_S,
+        )
+    assert not (tmp_path / "parent" / "latest.json").exists()
+
+
+def test_isolation_report_preserves_same_explicit_legacy_timing(tmp_path: Path) -> None:
+    children = []
+    for sequence in range(1, 3):
+        path = write_child_report(
+            tmp_path / f"child-{sequence}",
+            client="foghttp",
+            aggregate=[],
+            runs=[],
+            skipped={},
+            extra_metadata={"timing_scope": "requests-sampler-inclusive-v1"},
+        )
+        children.append(child_result(sequence, "foghttp", path))
+    parent = tmp_path / "parent"
+
+    write_isolation_report(
+        benchmark_args(parent),
+        children,
+        {},
+        finalizer=get_suite("requests").finalize_report,
+        child_cooldown_s=CHILD_COOLDOWN_S,
+    )
+
+    assert json.loads((parent / "latest.json").read_text())["metadata"]["timing_scope"] == (
+        "requests-sampler-inclusive-v1"
+    )
+
+
+@pytest.mark.parametrize("stale_declaration", [False, True])
+def test_isolation_report_rejects_mixed_streaming_child_scopes(
+    tmp_path: Path,
+    *,
+    stale_declaration: bool,
+) -> None:
+    children = []
+    for sequence, scope in enumerate(("load-only-v2", "legacy-sampler-v1"), start=1):
+        path = write_child_report(
+            tmp_path / f"child-{sequence}",
+            client="foghttp",
+            suite=RESPONSE_STREAMING_SUITE,
+            aggregate=[streaming_aggregate(scope)],
+            runs=[],
+            skipped={},
+            extra_metadata={
+                "timing_scope": "load-only-v2" if stale_declaration else scope,
+                "timing_scopes": [scope],
+            },
+        )
+        children.append(child_result(sequence, "foghttp", path))
+
+    error = "rows disagree on timing scope" if stale_declaration else "children disagree on timing scope"
+    with pytest.raises(ValueError, match=error):
+        write_isolation_report(
+            benchmark_args(tmp_path / "parent", suite=RESPONSE_STREAMING_SUITE),
+            children,
+            {},
+            finalizer=get_suite(RESPONSE_STREAMING_SUITE).finalize_report,
+            child_cooldown_s=CHILD_COOLDOWN_S,
+        )
+
+
+def test_isolation_report_rejects_contradictory_explicit_run_timing(tmp_path: Path) -> None:
+    report = write_child_report(
+        tmp_path / "child",
+        client="foghttp",
+        suite=RESPONSE_STREAMING_SUITE,
+        aggregate=[streaming_aggregate("load-only-v2")],
+        runs=[streaming_run("legacy-sampler-v1")],
+        skipped={},
+    )
+
+    with pytest.raises(ValueError, match="rows disagree on timing scope"):
+        write_isolation_report(
+            benchmark_args(tmp_path / "parent", suite=RESPONSE_STREAMING_SUITE),
+            [child_result(1, "foghttp", report)],
+            {},
+            finalizer=get_suite(RESPONSE_STREAMING_SUITE).finalize_report,
+            child_cooldown_s=CHILD_COOLDOWN_S,
+        )
 
 
 def test_isolation_report_preserves_streaming_scopes(tmp_path: Path) -> None:
@@ -194,6 +330,7 @@ def test_isolation_report_preserves_streaming_scopes(tmp_path: Path) -> None:
         benchmark_args(parent_dir, suite=RESPONSE_STREAMING_SUITE),
         children,
         {},
+        finalizer=get_suite(RESPONSE_STREAMING_SUITE).finalize_report,
         child_cooldown_s=CHILD_COOLDOWN_S,
     )
 
@@ -201,6 +338,34 @@ def test_isolation_report_preserves_streaming_scopes(tmp_path: Path) -> None:
     assert {key: metadata[key] for key in shared} == shared
     assert metadata["throughput_scopes"] == ["observed-v1", "verified-eof-v2"]
     assert metadata["timing_scopes"] == ["load-only-v2"]
+
+
+def test_isolation_report_keeps_empty_streaming_child_diagnostics(tmp_path: Path) -> None:
+    report = write_child_report(
+        tmp_path / "child",
+        client="foghttp",
+        suite=RESPONSE_STREAMING_SUITE,
+        aggregate=[],
+        runs=[],
+        skipped={"async:foghttp": "unavailable"},
+        extra_metadata={"timing_scopes": []},
+    )
+    parent = tmp_path / "parent"
+
+    write_isolation_report(
+        benchmark_args(parent, suite=RESPONSE_STREAMING_SUITE),
+        [child_result(1, "foghttp", report)],
+        {},
+        finalizer=get_suite(RESPONSE_STREAMING_SUITE).finalize_report,
+        child_cooldown_s=CHILD_COOLDOWN_S,
+    )
+
+    payload = json.loads((parent / "latest.json").read_text())
+    assert payload["metadata"]["timing_scope"] == "load-only-v2"
+    assert payload["metadata"]["timing_scopes"] == []
+    assert payload["metadata"]["skipped"] == {"async:foghttp": "unavailable"}
+    assert payload["aggregate"] == []
+    assert payload["runs"] == []
 
 
 @pytest.mark.parametrize(
@@ -237,11 +402,17 @@ def test_isolation_report_rejects_inconsistent_streaming_contracts(
         )
         children.append(child_result(sequence, "foghttp", report))
 
-    with pytest.raises(ValueError, match=f"children disagree on {changed_field}"):
+    error = (
+        "metadata.streaming_metric_schema_version must be an integer"
+        if changed_field == "streaming_metric_schema_version" and not missing
+        else f"children disagree on {changed_field}"
+    )
+    with pytest.raises(ValueError, match=error):
         write_isolation_report(
             benchmark_args(tmp_path / "parent", suite=RESPONSE_STREAMING_SUITE),
             children,
             {},
+            finalizer=get_suite(RESPONSE_STREAMING_SUITE).finalize_report,
             child_cooldown_s=CHILD_COOLDOWN_S,
         )
 
@@ -272,11 +443,12 @@ def test_isolation_report_checks_every_child_provenance(
         second_metadata["package_sources"]["foghttp"]["module_file"] = "/old/foghttp/__init__.py"
     children: list[ChildProcessResult] = []
     for sequence, extra_metadata in enumerate((first_metadata, second_metadata), start=1):
+        scenario = f"provenance-child-{sequence}"
         report = write_child_report(
             tmp_path / f"child-{sequence}",
             client="foghttp",
-            aggregate=[{"client": "foghttp", "ok_req_s_median": 100.0}],
-            runs=[{"client": "foghttp", "repeat": sequence}],
+            aggregate=[dict(request_aggregate("foghttp"), scenario=scenario)],
+            runs=[dict(request_run("foghttp", repeat=sequence), scenario=scenario)],
             skipped={},
             extra_metadata=extra_metadata,
         )
@@ -287,6 +459,7 @@ def test_isolation_report_checks_every_child_provenance(
         benchmark_args(parent_dir),
         children,
         {},
+        finalizer=get_suite("requests").finalize_report,
         child_cooldown_s=CHILD_COOLDOWN_S,
     )
 
@@ -331,6 +504,7 @@ def test_isolation_report_preserves_provenance_when_merging_saved_reports(tmp_pa
         benchmark_args(parent_dir),
         [child_result(1, "foghttp", report)],
         {},
+        finalizer=get_suite("requests").finalize_report,
         child_cooldown_s=CHILD_COOLDOWN_S,
     )
 
@@ -356,7 +530,7 @@ def test_proxy_connect_isolated_report_recomputes_direct_ratios_after_merge(tmp_
         client="foghttp",
         suite=PROXY_CONNECT_SUITE,
         aggregate=[
-            proxy_row("proxy-connect-cold", "explicit-proxy", "cold-client", ok_req_s=50.0, direct_ratio=None),
+            proxy_row("proxy-connect-cold", "explicit", "cold-client", ok_req_s=50.0, direct_ratio=None),
         ],
         runs=[],
         skipped={},
@@ -367,6 +541,7 @@ def test_proxy_connect_isolated_report_recomputes_direct_ratios_after_merge(tmp_
         args,
         [child_result(1, "foghttp", direct_report), child_result(2, "foghttp", cold_report)],
         {},
+        finalizer=get_suite(args.suite).finalize_report,
         child_cooldown_s=CHILD_COOLDOWN_S,
     )
 
@@ -394,6 +569,7 @@ def write_child_report(
                     "timestamp": "20260607-000000",
                     "server": "child server",
                     "suite": suite,
+                    "timing_scope": current_timing_scope(suite),
                     "package_versions": {"foghttp": "0.3.4"},
                     "run_settling": {
                         "cooldown_s": RUN_COOLDOWN_S,
@@ -422,6 +598,13 @@ def proxy_row(
         "case": case,
         "client": "foghttp",
         "concurrency": 1,
+        "request_limit": 1,
+        "requests": 100,
+        "repeats": 1,
+        "errors_total": 0,
+        "warmup_errors_total": 0,
+        "ok_requests_total": 100,
+        "group": "https",
         "config": config,
         "direct_ratio": direct_ratio,
         "lifecycle": lifecycle,

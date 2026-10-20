@@ -1,5 +1,6 @@
-__all__ = ("classify_report_validity", "validity_summary_from_metadata")
+__all__ = ("classify_report_validity", "combine_validity_summaries", "validity_summary_from_metadata")
 
+from collections.abc import Iterable
 from typing import cast
 
 from foghttp_benchmark.models import JsonObject
@@ -21,22 +22,52 @@ def validity_summary_from_metadata(
     aggregate_rows: list[JsonObject],
 ) -> ValiditySummary:
     current = classify_report_validity(suite=suite, aggregate_rows=aggregate_rows, metadata=metadata)
-    validity = metadata.get("validity")
-    if isinstance(validity, dict):
-        stored = validity_summary_from_payload(cast("JsonObject", validity))
-        if stored is not None:
-            reasons = list(current.reasons)
-            reasons.extend(reason for reason in stored.reasons if reason not in reasons)
-            status = combined_status((current.status, stored.status))
-            return ValiditySummary(
-                status=status,
-                is_valid=current.is_valid and stored.is_valid,
-                can_compare=current.can_compare and stored.can_compare,
-                reason_count=len(reasons),
-                reason_counts=count_reasons(reasons),
-                reasons=tuple(reasons),
-            )
-    return current
+    records: list[tuple[str, JsonObject]] = [("metadata", metadata)]
+    isolation = metadata.get("isolation")
+    children = isolation.get("children") if isinstance(isolation, dict) else None
+    if isinstance(children, list):
+        records.extend(
+            (f"metadata.isolation.children[{index}]", cast("JsonObject", child))
+            for index, child in enumerate(children)
+            if isinstance(child, dict)
+        )
+    summaries = [current]
+    for path, record in records:
+        if "validity" in record:
+            summaries.append(recorded_validity(record["validity"], path))
+    return current if len(summaries) == 1 else combine_validity_summaries(summaries)
+
+
+def recorded_validity(value: object, path: str) -> ValiditySummary:
+    if not isinstance(value, dict):
+        msg = f"{path}.validity must be an object"
+        raise TypeError(msg)
+    try:
+        return validity_summary_from_payload(cast("JsonObject", value))
+    except (TypeError, ValueError) as exc:
+        if path == "metadata":
+            raise
+        msg = f"{path}.validity: {exc}"
+        raise ValueError(msg) from exc
+
+
+def combine_validity_summaries(summaries: Iterable[ValiditySummary]) -> ValiditySummary:
+    """Retain every restriction when combining current, recorded or child evidence."""
+    items = tuple(summaries)
+    reasons: list[ValidityReason] = []
+    for summary in items:
+        reasons.extend(reason for reason in summary.reasons if reason not in reasons)
+    status = combined_status((*(summary.status for summary in items), *(reason.status for reason in reasons)))
+    return ValiditySummary(
+        status=status,
+        is_valid=status == "valid" and all(summary.is_valid for summary in items),
+        can_compare=status in ("valid", "warning")
+        and all(summary.can_compare for summary in items)
+        and reasons_allow_comparison(reasons),
+        reason_count=len(reasons),
+        reason_counts=count_reasons(reasons),
+        reasons=tuple(reasons),
+    )
 
 
 def classify_report_validity(

@@ -4,7 +4,8 @@ import pytest
 from typer.testing import CliRunner
 
 from foghttp_benchmark.cli import app
-from foghttp_benchmark.compare.reports import build_comparison, render_compare_markdown
+from foghttp_benchmark.compare.reports import build_comparison
+from foghttp_benchmark.rendering import load_report_template, render_compare_markdown
 from tests.compare.factories import (
     legacy_request_row,
     one_upstream_row,
@@ -40,7 +41,7 @@ def test_compare_infers_legacy_request_reports(tmp_path: Path) -> None:
     )
 
     comparison = build_comparison(old_report, new_report, focus_client="foghttp", top_n=1)
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
 
     assert comparison.metadata.suite == "requests"
     assert comparison.metadata.old_focus_version == "0.1.3"
@@ -69,7 +70,7 @@ def test_resource_reports_skip_competitive_position(tmp_path: Path) -> None:
     )
 
     comparison = build_comparison(old_report, new_report, focus_client="foghttp", top_n=1)
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
 
     assert comparison.wins is None
     assert "Competitive Position" not in markdown
@@ -98,7 +99,7 @@ def test_compare_infers_one_upstream_reports(tmp_path: Path) -> None:
     )
 
     comparison = build_comparison(old_report, new_report, focus_client="foghttp", top_n=1)
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
 
     assert comparison.metadata.suite == "one-upstream"
     assert comparison.overall.primary_geomean_ratio == pytest.approx(1.1)
@@ -128,7 +129,7 @@ def test_compare_infers_request_builder_reports(tmp_path: Path) -> None:
     )
 
     comparison = build_comparison(old_report, new_report, focus_client="foghttp", top_n=1)
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
 
     assert comparison.metadata.suite == "request-builder"
     assert comparison.overall.primary_geomean_ratio == pytest.approx(1.2)
@@ -161,7 +162,7 @@ def test_compare_blocks_competitive_position_for_invalid_inputs(tmp_path: Path) 
     )
 
     comparison = build_comparison(old_report, new_report, focus_client="foghttp", top_n=1)
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
 
     assert comparison.validity.new_status == "needs-rerun"
     assert comparison.validity.blocks_strong_conclusions

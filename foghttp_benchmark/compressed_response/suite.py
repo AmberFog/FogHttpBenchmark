@@ -4,29 +4,28 @@ import os
 from typing import TYPE_CHECKING
 
 from foghttp_benchmark.compressed_response.scenarios import compressed_response_scenarios
-from foghttp_benchmark.constants import DEFAULT_COMPRESSED_RESPONSE_SCENARIOS, DEFAULT_SCENARIOS
 from foghttp_benchmark.progress import ProgressReporter, progress_stage, progress_status
 from foghttp_benchmark.reports import write_reports
 from foghttp_benchmark.run_settling import run_settling_config, settle_after_run
 from foghttp_benchmark.runner import build_plan, run_once
 from foghttp_benchmark.server import benchmark_server
+from foghttp_benchmark.suite_selection import available_clients_for_suite, parse_csv, parse_int_csv
 from foghttp_benchmark.validation import validate_request_benchmark_args
 
 
 if TYPE_CHECKING:
-    from foghttp_benchmark.models import BenchmarkArgs, ClientSpec, RunResult
+    from foghttp_benchmark.models import BenchmarkArgs, RunResult
 
 
 async def run_compressed_response_suite(
     args: "BenchmarkArgs",
-    clients: list["ClientSpec"],
-    skipped: dict[str, str],
     *,
     progress: ProgressReporter | None = None,
 ) -> None:
+    clients, skipped = available_clients_for_suite(args)
     progress_status(progress, "Building compressed response benchmark plan")
     scenario_map = compressed_response_scenarios()
-    requested_scenarios = compressed_response_scenario_names(args.scenarios)
+    requested_scenarios = parse_csv(args.scenarios)
     concurrency_levels = parse_int_csv(args.concurrency)
     validate_request_benchmark_args(
         args,
@@ -79,12 +78,6 @@ async def run_compressed_response_suite(
     write_reports(results, skipped, args, settling_config=settling_config)
 
 
-def compressed_response_scenario_names(value: str) -> list[str]:
-    if value == DEFAULT_SCENARIOS:
-        return parse_csv(DEFAULT_COMPRESSED_RESPONSE_SCENARIOS)
-    return parse_csv(value)
-
-
 def compressed_response_progress_label(
     *,
     mode: str,
@@ -95,15 +88,3 @@ def compressed_response_progress_label(
     repeats: int,
 ) -> str:
     return f"{mode}/{client} {scenario} concurrency={concurrency} repeat={repeat}/{repeats}"
-
-
-def parse_csv(value: str) -> list[str]:
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-def parse_int_csv(value: str) -> list[int]:
-    try:
-        return [int(item) for item in parse_csv(value)]
-    except ValueError as exc:
-        msg = f"invalid integer list: {value}"
-        raise ValueError(msg) from exc

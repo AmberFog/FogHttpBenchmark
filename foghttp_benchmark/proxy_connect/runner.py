@@ -12,7 +12,6 @@ import os
 from queue import Empty, Queue
 import random
 import time
-from typing import cast
 
 from foghttp_benchmark.constants import ASYNC_MODE
 from foghttp_benchmark.progress import (
@@ -35,7 +34,7 @@ from foghttp_benchmark.proxy_connect.models import (
 )
 from foghttp_benchmark.proxy_connect.proxy_server import ProxyServerStats
 from foghttp_benchmark.resources import ResourceSampler
-from foghttp_benchmark.runner import percentile
+from foghttp_benchmark.statistics import percentile
 
 
 PROXY_ENV_KEYS = (
@@ -157,11 +156,10 @@ async def run_proxy_connect_case(
                 collect=False,
                 progress=progress,
                 stage_name=f"Warmup proxy load: {label}",
-                mode=spec.mode,
             )
             measured_proxy_start = proxy_stats.snapshot()
-            started = time.perf_counter()
             async with ResourceSampler() as sampler:
+                started = time.perf_counter()
                 load_result = await run_load_with_progress(
                     client,
                     case,
@@ -171,9 +169,8 @@ async def run_proxy_connect_case(
                     collect=True,
                     progress=progress,
                     stage_name=f"Measured proxy load: {label}",
-                    mode=spec.mode,
                 )
-            duration = time.perf_counter() - started
+                duration = time.perf_counter() - started
             measured_proxy_end = proxy_stats.snapshot()
             client_stats = client.stats()
         finally:
@@ -238,10 +235,9 @@ async def run_load_with_progress(
     collect: bool,
     progress: ProgressReporter | None,
     stage_name: str,
-    mode: str,
 ) -> ProxyConnectLoadResult:
     if requests == 0 or not is_progress_enabled(progress):
-        return await run_proxy_connect_load(client, case, url, concurrency, requests, collect=collect, mode=mode)
+        return await run_proxy_connect_load(client, case, url, concurrency, requests, collect=collect)
     with progress_stage(
         progress,
         stage_name,
@@ -256,7 +252,6 @@ async def run_load_with_progress(
             concurrency,
             requests,
             collect=collect,
-            mode=mode,
             progress=progress_step,
         )
 
@@ -269,15 +264,13 @@ async def run_proxy_connect_load(
     requests: int,
     *,
     collect: bool,
-    mode: str,
     progress: ProgressStep | None = None,
 ) -> ProxyConnectLoadResult:
     if requests == 0:
         return ProxyConnectLoadResult([], 0, {})
-    if mode == ASYNC_MODE:
-        async_client = cast("AsyncProxyConnectAdapter", client)
+    if client.mode == ASYNC_MODE:
         return await run_async_proxy_connect_load(
-            async_client,
+            client,
             case,
             url,
             concurrency,
@@ -285,10 +278,9 @@ async def run_proxy_connect_load(
             collect=collect,
             progress=progress,
         )
-    sync_client = cast("SyncProxyConnectAdapter", client)
     return await asyncio.to_thread(
         run_sync_proxy_connect_load,
-        sync_client,
+        client,
         case,
         url,
         concurrency,

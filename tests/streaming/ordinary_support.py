@@ -1,13 +1,13 @@
 from collections.abc import AsyncIterator
-from typing import Self
+from typing import Literal, Self
 
 from foghttp_benchmark.models import ClientStats
 from foghttp_benchmark.server import benchmark_server
 from foghttp_benchmark.streaming.cases import streaming_cases
 from foghttp_benchmark.streaming.factories import make_httpx_async
 from foghttp_benchmark.streaming.models import (
+    AsyncStreamingClientSpec,
     StreamingCase,
-    StreamingClientSpec,
     StreamingLoadResult,
     StreamingOutcome,
     StreamingResult,
@@ -31,6 +31,8 @@ class OutcomeSource:
 
 
 class AsyncOutcomeClient(OutcomeSource):
+    mode: Literal["async"] = "async"
+
     async def stream(self, _case: StreamingCase, _url: str) -> StreamingOutcome:
         return self.next_outcome()
 
@@ -39,6 +41,8 @@ class AsyncOutcomeClient(OutcomeSource):
 
 
 class SyncOutcomeClient(OutcomeSource):
+    mode: Literal["sync"] = "sync"
+
     def stream(self, _case: StreamingCase, _url: str) -> StreamingOutcome:
         return self.next_outcome()
 
@@ -83,7 +87,7 @@ class SlowExitSampler:
 async def run_controlled_http_stream() -> StreamingResult:
     async with benchmark_server() as base_url:
         return await run_streaming_case(
-            spec=StreamingClientSpec("httpx", "async", make_httpx_async),
+            spec=AsyncStreamingClientSpec("httpx", make_httpx_async),
             base_url=base_url,
             case=streaming_cases()["stream-64k"],
             concurrency=1,

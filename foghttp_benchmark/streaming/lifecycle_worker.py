@@ -2,6 +2,7 @@ __all__ = ("main", "run_lifecycle_worker")
 
 import argparse
 import asyncio
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass, field
 import gc
@@ -12,13 +13,15 @@ from pathlib import Path
 import resource
 import sys
 import time
-from typing import cast
+from typing import TypeVar, cast
 from urllib.parse import urlencode
 import uuid
 
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.models import JsonObject
 from foghttp_benchmark.provenance import package_sources, research_provenance_from_env
 from foghttp_benchmark.streaming.attribution_measure import measure_async_batch
+from foghttp_benchmark.streaming.attribution_payloads import AttributionBatch
 from foghttp_benchmark.streaming.clients import available_streaming_clients
 from foghttp_benchmark.streaming.lifecycle_consume import (
     LifecycleStreamSample,
@@ -42,7 +45,12 @@ from foghttp_benchmark.streaming.lifecycle_models import (
     validate_lifecycle_case,
     validate_lifecycle_config,
 )
-from foghttp_benchmark.streaming.models import AsyncStreamingAdapter, StreamingClientConfig, SyncStreamingAdapter
+from foghttp_benchmark.streaming.models import (
+    AsyncStreamingAdapter,
+    StreamingClientConfig,
+    StreamingClientSpec,
+    SyncStreamingAdapter,
+)
 from foghttp_benchmark.streaming.python_profile import active_python_instrumentation
 
 
@@ -202,7 +210,8 @@ def _sync_batch(
 
 async def _async_batch(worker: _Worker, adapter: AsyncStreamingAdapter, number: int, rounds: int) -> JsonObject:
     if worker.config.attribution is not None:
-        return await _attribution_batch(worker, adapter, number, rounds)
+        # Attribution types end at the mixed lifecycle report boundary; the dict is unchanged.
+        return cast("JsonObject", await _attribution_batch(worker, adapter, number, rounds))
     client = async_client(adapter)
     digest = expected_body_digest(worker.config.body_bytes)
     samples: list[LifecycleStreamSample] = []
@@ -234,7 +243,12 @@ async def _async_batch(worker: _Worker, adapter: AsyncStreamingAdapter, number: 
     return batch
 
 
-async def _attribution_batch(worker: _Worker, adapter: AsyncStreamingAdapter, number: int, rounds: int) -> JsonObject:
+async def _attribution_batch(
+    worker: _Worker,
+    adapter: AsyncStreamingAdapter,
+    number: int,
+    rounds: int,
+) -> AttributionBatch:
     config = worker.config.attribution
     if config is None:
         msg = "Bytes batch requires attribution configuration"
@@ -258,8 +272,8 @@ async def _attribution_batch(worker: _Worker, adapter: AsyncStreamingAdapter, nu
         else None,
     )
     batch["server_before"] = before
-    errors = batch.get("errors")
-    if isinstance(errors, list) and errors:
+    errors = batch["errors"]
+    if errors:
         worker.record_error(f"batch-{number}", ValueError(f"{len(errors)} async bytes measurement errors"))
     return batch
 
@@ -349,19 +363,30 @@ def _server_delivery_evidence(
     }, errors
 
 
-def _make_adapter(worker: _Worker) -> AsyncStreamingAdapter | SyncStreamingAdapter:
+_Adapter = TypeVar("_Adapter", AsyncStreamingAdapter, SyncStreamingAdapter)
+
+
+def _client_spec(worker: _Worker) -> StreamingClientSpec:
     clients, skipped = available_streaming_clients([worker.case.client], [worker.case.mode])
     if len(clients) != 1:
         msg = f"Lifecycle client is unavailable: {skipped}"
         raise RuntimeError(msg)
+    return clients[0]
+
+
+def _make_adapter(worker: _Worker, factory: Callable[[StreamingClientConfig], _Adapter]) -> _Adapter:
     started = time.perf_counter_ns()
-    adapter = clients[0].factory(_client_config(worker.case, worker.config))
+    adapter = factory(_client_config(worker.case, worker.config))
     worker.report["client_construction_ms"] = (time.perf_counter_ns() - started) / 1_000_000
     return adapter
 
 
 def _run_sync(worker: _Worker) -> None:
-    adapter = cast("SyncStreamingAdapter", _make_adapter(worker))
+    spec = _client_spec(worker)
+    if spec.mode != SYNC_MODE:
+        msg = "Lifecycle sync worker received a different client mode"
+        raise RuntimeError(msg)
+    adapter = _make_adapter(worker, spec.factory)
     batches: list[JsonObject] = []
     worker.report["batches"] = batches
     try:
@@ -392,7 +417,11 @@ def _run_sync(worker: _Worker) -> None:
 
 
 async def _run_async(worker: _Worker) -> None:
-    adapter = cast("AsyncStreamingAdapter", _make_adapter(worker))
+    spec = _client_spec(worker)
+    if spec.mode != ASYNC_MODE:
+        msg = "Lifecycle async worker received a different client mode"
+        raise RuntimeError(msg)
+    adapter = _make_adapter(worker, spec.factory)
     batches: list[JsonObject] = []
     worker.report["batches"] = batches
     close_allowed = True

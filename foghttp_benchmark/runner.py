@@ -14,6 +14,7 @@ from foghttp_benchmark.load import run_load
 from foghttp_benchmark.models import ClientConfig, ClientSpec, LoadResult, RunResult, Scenario
 from foghttp_benchmark.progress import INNER_MILESTONE_PERCENT, ProgressReporter, is_progress_enabled, progress_stage
 from foghttp_benchmark.resources import ResourceSampler
+from foghttp_benchmark.statistics import percentile
 
 
 def build_plan(
@@ -77,9 +78,9 @@ async def run_once(
             stage_name=f"Warmup load: {label}",
         )
         gc.collect()
-        cpu_start = time.process_time()
-        started = time.perf_counter()
         async with ResourceSampler() as sampler:
+            cpu_start = time.process_time()
+            started = time.perf_counter()
             load_result = await run_load_with_progress(
                 client,
                 scenario,
@@ -90,8 +91,8 @@ async def run_once(
                 progress=progress,
                 stage_name=f"Measured load: {label}",
             )
-        duration = time.perf_counter() - started
-        cpu = time.process_time() - cpu_start
+            duration = time.perf_counter() - started
+            cpu = time.process_time() - cpu_start
         latencies = sorted(load_result.latencies_ms)
         client_stats = client.stats()
     finally:
@@ -159,10 +160,3 @@ async def run_load_with_progress(
             collect=collect,
             progress=progress_step,
         )
-
-
-def percentile(values: list[float], pct: float) -> float:
-    if not values:
-        return 0.0
-    index = min(len(values) - 1, max(0, round((pct / 100) * (len(values) - 1))))
-    return values[index]

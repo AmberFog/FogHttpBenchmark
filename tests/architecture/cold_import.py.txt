@@ -1,0 +1,6 @@
+from importlib import import_module
+import json
+import sys
+
+import_module(sys.argv[1])
+print(json.dumps(sorted(name for name in sys.modules if name.startswith("foghttp_benchmark"))))

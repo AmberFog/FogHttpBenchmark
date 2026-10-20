@@ -23,6 +23,13 @@ from foghttp_benchmark.streaming.attribution_models import (
     AttributionConfig,
     validate_attribution_config,
 )
+from foghttp_benchmark.streaming.attribution_payloads import (
+    AttributionBatch,
+    CpuDelta,
+    CpuRole,
+    CpuSnapshot,
+    CpuSnapshotInProgress,
+)
 from foghttp_benchmark.streaming.bytes_payloads import streaming_bytes_sha256
 from foghttp_benchmark.streaming.protocols import AsyncStreamClient
 from foghttp_benchmark.streaming.python_profile import PythonLoadProfile
@@ -30,11 +37,18 @@ from foghttp_benchmark.streaming.python_profile import PythonLoadProfile
 
 MAX_BODY_BYTES = 1_048_576
 MAX_ROUNDS = 20
+CPU_ROLES: tuple[CpuRole, ...] = ("client", "server")
 
 
-def _cpu_snapshot(pid: int) -> JsonObject:
+def _cpu_snapshot(pid: int) -> CpuSnapshot:
     started = time.perf_counter_ns()
-    result: JsonObject = {"pid": pid, "probe_started_ns": started, "user_s": None, "system_s": None, "reason": None}
+    result: CpuSnapshotInProgress = {
+        "pid": pid,
+        "probe_started_ns": started,
+        "user_s": None,
+        "system_s": None,
+        "reason": None,
+    }
     try:
         process = importlib.import_module("psutil").Process(pid)
         counters = process.cpu_times()
@@ -42,20 +56,22 @@ def _cpu_snapshot(pid: int) -> JsonObject:
     except Exception as error:  # noqa: BLE001 - missing process counters remain explicit unavailable evidence.
         result["reason"] = f"{type(error).__name__}: {error}"
     result["probe_finished_ns"] = time.perf_counter_ns()
-    return result
+    # The completed probe has the required end timestamp; no runtime copy or validation.
+    return cast("CpuSnapshot", result)
 
 
 def _cpu_delta(
-    before: JsonObject,
-    after: JsonObject,
+    before: CpuSnapshot,
+    after: CpuSnapshot,
     *,
     started_ns: int,
     finished_ns: int,
     verified_bytes: int,
-) -> JsonObject:
+) -> CpuDelta:
     user = system = None
     reason = before["reason"] or after["reason"]
     if reason is None:
+        # A successful probe sets both counters. Keep this invariant without new probe checks.
         start_user, end_user = cast("float", before["user_s"]), cast("float", after["user_s"])
         start_system, end_system = cast("float", before["system_s"]), cast("float", after["system_s"])
         if end_user < start_user or end_system < start_system:
@@ -76,7 +92,7 @@ def _cpu_delta(
         "before": before,
         "after": after,
         "load_boundary_overhang_ns": (
-            started_ns - cast("int", before["probe_started_ns"]) + cast("int", after["probe_finished_ns"]) - finished_ns
+            started_ns - before["probe_started_ns"] + after["probe_finished_ns"] - finished_ns
         ),
         "scope": "Separate process user/system counters bracketing load, including the reported boundary probe span",
         "resolution_s": None,
@@ -323,7 +339,7 @@ async def measure_async_batch(
     server_pid: int,
     batch: int,
     python_profile_path: Path | None = None,
-) -> JsonObject:
+) -> AttributionBatch:
     client_module = type(client).__module__.split(".", 1)[0]
     validate_attribution_config(config, client=client_module)
     if type(body_bytes) is not int or not 0 < body_bytes <= MAX_BODY_BYTES:
@@ -348,7 +364,7 @@ async def measure_async_batch(
     ]
     expected = streaming_bytes_sha256(body_bytes)
     profile = _python_profile(config, batch=batch, path=python_profile_path)
-    before = {"client": _cpu_snapshot(os.getpid()), "server": _cpu_snapshot(server_pid)}
+    before: dict[CpuRole, CpuSnapshot] = {"client": _cpu_snapshot(os.getpid()), "server": _cpu_snapshot(server_pid)}
     budget = (
         ObservationBudget(histogram_bins_cap=config.histogram_bins_cap, global_histogram={})
         if window
@@ -367,11 +383,11 @@ async def measure_async_batch(
     )
     requests = len(pending)
     actual_rounds = requests // concurrency
-    after = {"client": _cpu_snapshot(os.getpid()), "server": _cpu_snapshot(server_pid)}
+    after: dict[CpuRole, CpuSnapshot] = {"client": _cpu_snapshot(os.getpid()), "server": _cpu_snapshot(server_pid)}
     finalize_started = time.perf_counter_ns()
     samples = [item.finalize(body_bytes=body_bytes, expected_digest=expected) for item in pending]
     finalize_duration = time.perf_counter_ns() - finalize_started
-    verified = sum(cast("int", sample["verified_success_bytes"]) for sample in samples)
+    verified = sum(sample["verified_success_bytes"] for sample in samples)
     observed = sum(item.observations.bytes_read for item in pending)
     ok = sum(sample["status"] == "ok" for sample in samples)
     duration = (finished - started) / 1_000_000_000
@@ -391,7 +407,7 @@ async def measure_async_batch(
             else all(item.observations.histogram_complete for item in pending),
         },
     )
-    result: JsonObject = {
+    result: AttributionBatch = {
         "batch": batch,
         "rounds": actual_rounds,
         "requests": requests,
@@ -407,9 +423,7 @@ async def measure_async_batch(
         "verified_bytes_per_second": verified / duration if duration else None,
         "mb_per_second": verified / (1024 * 1024) / duration if duration else None,
         "expected_aborts": 0,
-        "errors": [
-            {"stream": sample["stream"], **cast("JsonObject", sample["error"])} for sample in samples if sample["error"]
-        ],
+        "errors": [{"stream": sample["stream"], **sample["error"]} for sample in samples if sample["error"]],
         "samples": samples,
         "observation_budget": observation_budget,
         "cpu": {
@@ -420,7 +434,7 @@ async def measure_async_batch(
                 finished_ns=finished,
                 verified_bytes=verified,
             )
-            for role in ("client", "server")
+            for role in CPU_ROLES
         },
         "timing": {
             "load_started_ns": started,

@@ -14,8 +14,8 @@ from foghttp_benchmark.constants import (
     DEFAULT_WARMUP,
     PROXY_CONNECT_SUITE,
 )
-from foghttp_benchmark.isolation import selection
 from foghttp_benchmark.models import BenchmarkArgs
+from foghttp_benchmark.proxy_connect import suite as proxy_suite
 
 
 @dataclass(frozen=True)
@@ -40,9 +40,9 @@ def test_proxy_connect_isolation_selection_filters_unsupported_clients(monkeypat
             {"async:aiohttp": "proxy-connect suite requires comparable client-level proxy support"},
         )
 
-    monkeypatch.setattr(selection, "available_proxy_connect_clients", fake_available_proxy_connect_clients)
+    monkeypatch.setattr(proxy_suite, "available_proxy_connect_clients", fake_available_proxy_connect_clients)
 
-    result = selection.select_clients_for_isolation(
+    result = proxy_suite.select_clients(
         BenchmarkArgs(
             suite=PROXY_CONNECT_SUITE,
             clients="foghttp,httpx,aiohttp",

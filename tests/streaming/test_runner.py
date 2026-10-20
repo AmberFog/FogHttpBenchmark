@@ -6,7 +6,7 @@ import pytest
 
 from foghttp_benchmark.streaming import runner
 from foghttp_benchmark.streaming.cases import streaming_cases
-from foghttp_benchmark.streaming.models import StreamingCase, StreamingClientSpec, StreamingOutcome
+from foghttp_benchmark.streaming.models import AsyncStreamingClientSpec, StreamingCase, StreamingOutcome
 from foghttp_benchmark.streaming.runner import outcome_matches, run_streaming_case, run_streaming_load
 from tests.streaming.ordinary_support import (
     AsyncOutcomeClient,
@@ -144,7 +144,7 @@ def test_failed_observations_are_separate_from_verified_eof_throughput(mode: str
     bad_status = replace(good, status_code=503)
     outcomes = [good, corrupt, truncated, bad_status, TimeoutError()]
     client = AsyncOutcomeClient(outcomes) if mode == "async" else SyncOutcomeClient(outcomes)
-    result = asyncio.run(run_streaming_load(client, case, "unused", 1, len(outcomes), collect=True, mode=mode))
+    result = asyncio.run(run_streaming_load(client, case, "unused", 1, len(outcomes), collect=True))
 
     assert result.errors == len(outcomes) - 1
     assert result.error_types == {"check_failed": 3, "TimeoutError": 1}
@@ -159,7 +159,7 @@ def test_expected_first_chunk_close_is_excluded_from_eof_throughput(mode: str) -
     case = streaming_cases()["first-chunk-close-1m"]
     outcome = StreamingOutcome(status_code=200, bytes_read=100, chunks_read=1, first_chunk_ms=0.1)
     client = AsyncOutcomeClient([outcome]) if mode == "async" else SyncOutcomeClient([outcome])
-    result = asyncio.run(run_streaming_load(client, case, "unused", 1, 1, collect=True, mode=mode))
+    result = asyncio.run(run_streaming_load(client, case, "unused", 1, 1, collect=True))
 
     assert result.errors == 0
     assert result.bytes_read == outcome.bytes_read
@@ -175,7 +175,7 @@ def test_streaming_duration_excludes_sampler_enter_and_delayed_exit(monkeypatch:
     monkeypatch.setattr(runner.time, "perf_counter", clock.now)
     result = asyncio.run(
         run_streaming_case(
-            spec=StreamingClientSpec("controlled", "async", lambda _config: client),
+            spec=AsyncStreamingClientSpec("controlled", lambda _config: client),
             base_url="unused",
             case=streaming_cases()["stream-64k"],
             concurrency=1,

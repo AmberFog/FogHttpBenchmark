@@ -12,7 +12,7 @@ import time
 from foghttp_benchmark.creation.models import AsyncCreationOperation, SyncCreationOperation
 from foghttp_benchmark.models import ClientCreationResult, ClientSpec, LoadResult
 from foghttp_benchmark.resources import ResourceSnapshot, resource_delta, resource_int_delta, take_resource_snapshot
-from foghttp_benchmark.runner import percentile
+from foghttp_benchmark.statistics import percentile
 
 
 async def measure_creation_operation(

@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from foghttp_benchmark import cli
+from foghttp_benchmark.application import execution
 from foghttp_benchmark.streaming import lifecycle
 from foghttp_benchmark.streaming.lifecycle_models import (
     LifecycleCase,
@@ -88,7 +89,7 @@ def test_individual_worker_case_cannot_bypass_profile_caps(overrides: dict[str, 
 
 def test_cli_lifecycle_uses_profile_defaults_and_preserves_explicit_lower_work(monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
 
     result = CliRunner().invoke(
         cli.app,
@@ -108,7 +109,7 @@ def test_cli_lifecycle_uses_profile_defaults_and_preserves_explicit_lower_work(m
 
 def test_cli_lifecycle_rejects_other_suite_before_launch(monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
 
     result = CliRunner().invoke(cli.app, ["--streaming-profile", "lifecycle"])
 
@@ -118,7 +119,7 @@ def test_cli_lifecycle_rejects_other_suite_before_launch(monkeypatch: pytest.Mon
 
 def test_cli_default_does_not_expand_lifecycle_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
 
     result = CliRunner().invoke(cli.app, ["--suite", "response-streaming", "--no-progress"])
 

@@ -4,7 +4,7 @@ import argparse
 import asyncio
 from collections.abc import Sequence
 
-from foghttp_benchmark.cli import run_benchmark_child
+from foghttp_benchmark.application import execution
 from foghttp_benchmark.constants import (
     BENCHMARK_SEED,
     DEFAULT_CLIENT_COUNTS,
@@ -69,7 +69,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = build_parser()
     namespace = parser.parse_args(argv)
     try:
-        asyncio.run(run_benchmark_child(build_child_args(namespace), show_progress=namespace.show_progress))
+        asyncio.run(execution.run_benchmark_child(build_child_args(namespace), show_progress=namespace.show_progress))
     except (TypeError, ValueError) as exc:
         parser.exit(2, f"{parser.prog}: error: {exc}\n")
 

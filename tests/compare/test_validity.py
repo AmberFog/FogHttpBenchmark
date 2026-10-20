@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from foghttp_benchmark.compare.reports import build_comparison, render_compare_markdown
+from foghttp_benchmark.compare.reports import build_comparison
+from foghttp_benchmark.rendering import load_report_template, render_compare_markdown
 from tests.compare.factories import request_row, write_report
 
 
@@ -24,7 +25,7 @@ def test_stale_validity_cannot_rank_failed_rows(tmp_path: Path, status: str) -> 
     new.write_text(json.dumps(payload))
 
     comparison = build_comparison(old, new, focus_client="zapros-pyreqwest", top_n=1)
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
 
     assert comparison.validity.new_status == "needs-rerun"
     assert comparison.validity.blocks_strong_conclusions
@@ -42,7 +43,7 @@ def test_compatibility_warning_blocks_competitive_position(tmp_path: Path) -> No
     new = write_report(tmp_path, "new.json", aggregate=[affected_row], suite="requests", foghttp_version="0.4.1")
 
     comparison = build_comparison(old, new, focus_client="zapros-pyreqwest", top_n=1)
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
 
     assert comparison.validity.new_status == "warning"
     assert comparison.validity.blocks_strong_conclusions

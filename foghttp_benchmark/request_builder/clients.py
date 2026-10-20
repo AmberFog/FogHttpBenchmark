@@ -5,7 +5,7 @@ __all__ = (
 )
 
 import importlib
-from typing import Protocol
+from typing import Literal, Protocol
 
 from foghttp_benchmark.clients.httpxyz_import import import_httpxyz
 from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
@@ -22,11 +22,12 @@ from foghttp_benchmark.request_builder.cases import (
 )
 from foghttp_benchmark.request_builder.models import (
     AsyncRequestBuilderAdapter,
+    AsyncRequestBuilderClientSpec,
     RequestBuilderCase,
     RequestBuilderClientConfig,
-    RequestBuilderClientFactory,
     RequestBuilderClientSpec,
     SyncRequestBuilderAdapter,
+    SyncRequestBuilderClientSpec,
 )
 
 
@@ -55,6 +56,8 @@ class _SyncClient(Protocol):
 
 
 class _AsyncBuilderAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     def __init__(self, client: _AsyncClient) -> None:
         self.client = client
 
@@ -71,6 +74,8 @@ class _AsyncBuilderAdapter:
 
 
 class _SyncBuilderAdapter:
+    mode: Literal["sync"] = SYNC_MODE
+
     def __init__(self, client: _SyncClient) -> None:
         self.client = client
 
@@ -90,28 +95,26 @@ def available_request_builder_clients(
     requested_clients: list[str],
     requested_modes: list[str],
 ) -> tuple[list[RequestBuilderClientSpec], dict[str, str]]:
-    factories: dict[str, dict[str, RequestBuilderClientFactory]] = {
-        ASYNC_MODE: {
-            "foghttp": make_foghttp_async,
-            "httpx": make_httpx_async,
-            "httpxyz": make_httpxyz_async,
-        },
-        SYNC_MODE: {
-            "foghttp": make_foghttp_sync,
-            "httpx": make_httpx_sync,
-            "httpxyz": make_httpxyz_sync,
-        },
+    specs: tuple[RequestBuilderClientSpec, ...] = (
+        AsyncRequestBuilderClientSpec(name="foghttp", factory=make_foghttp_async),
+        AsyncRequestBuilderClientSpec(name="httpx", factory=make_httpx_async),
+        AsyncRequestBuilderClientSpec(name="httpxyz", factory=make_httpxyz_async),
+        SyncRequestBuilderClientSpec(name="foghttp", factory=make_foghttp_sync),
+        SyncRequestBuilderClientSpec(name="httpx", factory=make_httpx_sync),
+        SyncRequestBuilderClientSpec(name="httpxyz", factory=make_httpxyz_sync),
+    )
+    specs_by_identity: dict[tuple[str, str], RequestBuilderClientSpec] = {
+        (spec.mode, spec.name): spec for spec in specs
     }
     clients: list[RequestBuilderClientSpec] = []
     skipped: dict[str, str] = {}
     for mode in requested_modes:
-        mode_factories = factories.get(mode)
-        if mode_factories is None:
+        if mode not in {ASYNC_MODE, SYNC_MODE}:
             skipped[f"{mode}:*"] = "unknown mode"
             continue
         for name in requested_clients:
-            factory = mode_factories.get(name)
-            if factory is None:
+            spec = specs_by_identity.get((mode, name))
+            if spec is None:
                 skipped[f"{mode}:{name}"] = "request-builder suite requires build_request support"
                 continue
             try:
@@ -119,7 +122,7 @@ def available_request_builder_clients(
             except Exception as exc:  # noqa: BLE001
                 skipped[f"{mode}:{name}"] = f"{type(exc).__name__}: {exc}"
                 continue
-            clients.append(RequestBuilderClientSpec(name=name, mode=mode, factory=factory))
+            clients.append(spec)
     return clients, skipped
 
 
