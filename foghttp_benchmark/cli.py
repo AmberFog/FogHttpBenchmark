@@ -1,22 +1,20 @@
-__all__ = ("app", "compare", "main", "run_benchmark", "run_benchmark_child")
+__all__ = ("app", "compare", "main")
 
 import asyncio
 from dataclasses import replace
-import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 import typer
 
-from foghttp_benchmark.clients import available_clients
+from foghttp_benchmark.application import execution
 from foghttp_benchmark.compare.reports import build_comparison, write_or_print_compare_report
-from foghttp_benchmark.compressed_response.suite import run_compressed_response_suite
 from foghttp_benchmark.constants import (
     BENCHMARK_SEED,
-    CLIENT_CREATION_SUITE,
     COMPRESSED_RESPONSE_SUITE,
     DEFAULT_CLIENT_COUNTS,
     DEFAULT_CLIENTS,
+    DEFAULT_COMPRESSED_RESPONSE_SCENARIOS,
     DEFAULT_CONCURRENCY,
     DEFAULT_CREATION_ITERATIONS,
     DEFAULT_MAX_REDIRECTS,
@@ -42,60 +40,7 @@ from foghttp_benchmark.constants import (
     RESPONSE_STREAMING_SUITE,
     RESULTS_DIR,
 )
-from foghttp_benchmark.creation import run_client_creation_benchmarks
-from foghttp_benchmark.creation_reports import write_creation_reports
-from foghttp_benchmark.isolation import CHILD_PROCESS_ISOLATION, run_isolated_benchmark
-from foghttp_benchmark.models import BenchmarkArgs, ClientSpec
-from foghttp_benchmark.one_upstream import (
-    available_one_upstream_clients,
-    one_upstream_cases,
-    run_one_upstream_benchmarks,
-    write_one_upstream_reports,
-)
-from foghttp_benchmark.progress import BenchmarkProgress, ProgressReporter, progress_stage, progress_status
-from foghttp_benchmark.provenance import research_provenance_from_env
-from foghttp_benchmark.proxy_connect import (
-    available_proxy_connect_clients,
-    proxy_connect_cases,
-    run_proxy_connect_benchmarks,
-    write_proxy_connect_reports,
-)
-from foghttp_benchmark.proxy_connect.models import ProxyConnectEndpoints
-from foghttp_benchmark.proxy_connect.proxy_server import benchmark_tls_server, http_proxy_server
-from foghttp_benchmark.reports import write_reports
-from foghttp_benchmark.request_builder import (
-    available_request_builder_clients,
-    request_builder_cases,
-    run_request_builder_benchmarks,
-    write_request_builder_reports,
-)
-from foghttp_benchmark.resource import resource_cases, run_resource_backpressure_benchmarks
-from foghttp_benchmark.resource.reporting.reports import write_resource_reports
-from foghttp_benchmark.run_settling import run_settling_config, settle_after_run
-from foghttp_benchmark.runner import build_plan, run_once
-from foghttp_benchmark.scenarios import scenarios
-from foghttp_benchmark.server import benchmark_server
-from foghttp_benchmark.streaming import (
-    available_streaming_clients,
-    run_response_streaming_benchmarks,
-    streaming_cases,
-    write_streaming_reports,
-)
-from foghttp_benchmark.streaming.lifecycle import run_lifecycle_profile
-from foghttp_benchmark.validation import (
-    validate_client_creation_args,
-    validate_one_upstream_args,
-    validate_proxy_connect_args,
-    validate_request_benchmark_args,
-    validate_request_builder_args,
-    validate_resource_backpressure_args,
-    validate_streaming_args,
-    validate_suite,
-)
-
-
-if TYPE_CHECKING:
-    from foghttp_benchmark.models import RunResult
+from foghttp_benchmark.models import BenchmarkArgs
 
 
 app = typer.Typer(
@@ -120,11 +65,21 @@ def main(
     ] = REQUESTS_SUITE,
     clients: Annotated[str, typer.Option(help="Comma-separated clients to benchmark.")] = DEFAULT_CLIENTS,
     modes: Annotated[str, typer.Option(help="Comma-separated modes: async, sync.")] = DEFAULT_MODES,
-    concurrency: Annotated[str, typer.Option(help="Comma-separated concurrency levels.")] = DEFAULT_CONCURRENCY,
-    requests: Annotated[int, typer.Option(help="Measured requests per run.")] = DEFAULT_REQUESTS,
-    warmup: Annotated[int, typer.Option(help="Warmup requests or iterations per run, excluded from metrics.")] = (
-        DEFAULT_WARMUP
-    ),
+    concurrency: Annotated[
+        str,
+        typer.Option(help="Comma-separated concurrency levels. Omitted: suite/profile defaults.", show_default=False),
+    ] = DEFAULT_CONCURRENCY,
+    requests: Annotated[
+        int,
+        typer.Option(help="Measured requests per run. Omitted: suite/profile defaults.", show_default=False),
+    ] = DEFAULT_REQUESTS,
+    warmup: Annotated[
+        int,
+        typer.Option(
+            help="Warmup requests or iterations per run, excluded from metrics. Omitted: suite/profile defaults.",
+            show_default=False,
+        ),
+    ] = DEFAULT_WARMUP,
     repeats: Annotated[int, typer.Option(help="Measured repeats for each client/scenario/concurrency tuple.")] = (
         DEFAULT_REPEATS
     ),
@@ -137,7 +92,10 @@ def main(
         typer.Option("--no-shuffle", help="Run benchmark plan in declaration order."),
     ] = False,
     output_dir: Annotated[str, typer.Option(help="Directory for JSON and Markdown reports.")] = str(RESULTS_DIR),
-    scenarios: Annotated[str, typer.Option(help="Comma-separated benchmark scenarios.")] = DEFAULT_SCENARIOS,
+    scenarios: Annotated[
+        str,
+        typer.Option(help="Comma-separated benchmark scenarios. Omitted: suite/profile defaults.", show_default=False),
+    ] = DEFAULT_SCENARIOS,
     iterations: Annotated[int, typer.Option(help="Iterations for client creation and request builder benchmarks.")] = (
         DEFAULT_CREATION_ITERATIONS
     ),
@@ -254,13 +212,14 @@ def main(
         streaming_server_observations=streaming_server_observations,
     )
     try:
-        args = streaming_profile_defaults(ctx, args)
-        asyncio.run(run_benchmark(args, show_progress=show_progress))
+        args = resolve_cli_defaults(ctx, args)
+        asyncio.run(execution.run_benchmark(args, show_progress=show_progress))
     except (TypeError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
 
 
-def streaming_profile_defaults(context: typer.Context, args: BenchmarkArgs) -> BenchmarkArgs:
+def resolve_cli_defaults(context: typer.Context, args: BenchmarkArgs) -> BenchmarkArgs:
+    """Resolve omitted CLI options once; BenchmarkArgs always contains effective values."""
     for name in (
         "streaming_payload_bytes",
         "streaming_server_write_bytes",
@@ -280,16 +239,38 @@ def streaming_profile_defaults(context: typer.Context, args: BenchmarkArgs) -> B
         if source is not None and source.name != "DEFAULT" and args.streaming_profile != "async-bytes":
             msg = f"--{name.replace('_', '-')} requires --streaming-profile async-bytes"
             raise ValueError(msg)
-    if args.streaming_profile == "default":
-        return args
-    if args.streaming_profile not in {"lifecycle", "async-bytes"} or args.suite != RESPONSE_STREAMING_SUITE:
-        msg = "The lifecycle/async-bytes streaming profiles require --suite response-streaming"
-        raise ValueError(msg)
     defaulted = {
         name
         for name in ("clients", "modes", "concurrency", "requests", "warmup", "iterations", "repeats", "scenarios")
         if (source := context.get_parameter_source(name)) is not None and source.name == "DEFAULT"
     }
+    if args.streaming_profile == "default":
+        scenario_defaults = {
+            RESOURCE_BACKPRESSURE_SUITE: DEFAULT_RESOURCE_SCENARIOS,
+            ONE_UPSTREAM_SUITE: DEFAULT_ONE_UPSTREAM_SCENARIOS,
+            REQUEST_BUILDER_SUITE: DEFAULT_REQUEST_BUILDER_SCENARIOS,
+            COMPRESSED_RESPONSE_SUITE: DEFAULT_COMPRESSED_RESPONSE_SCENARIOS,
+            RESPONSE_STREAMING_SUITE: DEFAULT_STREAMING_SCENARIOS,
+            PROXY_CONNECT_SUITE: DEFAULT_PROXY_CONNECT_SCENARIOS,
+        }
+        request_defaults = {
+            RESPONSE_STREAMING_SUITE: DEFAULT_STREAMING_REQUESTS,
+            PROXY_CONNECT_SUITE: DEFAULT_PROXY_CONNECT_REQUESTS,
+        }
+        return replace(
+            args,
+            scenarios=scenario_defaults.get(args.suite, args.scenarios) if "scenarios" in defaulted else args.scenarios,
+            requests=request_defaults.get(args.suite, args.requests) if "requests" in defaulted else args.requests,
+            warmup=DEFAULT_PROXY_CONNECT_WARMUP
+            if args.suite == PROXY_CONNECT_SUITE and "warmup" in defaulted
+            else args.warmup,
+            concurrency=DEFAULT_PROXY_CONNECT_CONCURRENCY
+            if args.suite == PROXY_CONNECT_SUITE and "concurrency" in defaulted
+            else args.concurrency,
+        )
+    if args.streaming_profile not in {"lifecycle", "async-bytes"} or args.suite != RESPONSE_STREAMING_SUITE:
+        msg = "The lifecycle/async-bytes streaming profiles require --suite response-streaming"
+        raise ValueError(msg)
     return replace(
         args,
         clients="foghttp,httpx" if "clients" in defaulted else args.clients,
@@ -337,506 +318,3 @@ def compare(
         write_or_print_compare_report(comparison, output)
     except (TypeError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
-
-
-async def run_benchmark(args: BenchmarkArgs, *, show_progress: bool = True) -> None:
-    provenance = research_provenance_from_env(check_remote=True)
-    if args.streaming_profile == "async-bytes" and provenance is None:
-        msg = "Async bytes research requires a freshly verified FOGHTTP_BENCHMARK_RESEARCH_MANIFEST"
-        raise ValueError(msg)
-    with BenchmarkProgress(enabled=show_progress) as progress:
-        progress_status(progress, f"Preparing {args.suite} benchmark")
-        validate_suite(args.suite)
-        if args.streaming_profile in {"lifecycle", "async-bytes"}:
-            await run_lifecycle_profile(args, progress=progress)
-        elif args.streaming_profile == "default":
-            await run_isolated_benchmark(args, progress=progress)
-        else:
-            msg = f"Unknown streaming profile: {args.streaming_profile}"
-            raise ValueError(msg)
-
-
-async def run_benchmark_child(args: BenchmarkArgs, *, show_progress: bool = False) -> None:
-    research_provenance_from_env()
-    if args.streaming_profile != "default":
-        msg = "Lifecycle profiles require the parent-owned process launcher"
-        raise ValueError(msg)
-    child_args = replace(args, isolation=CHILD_PROCESS_ISOLATION)
-    with BenchmarkProgress(enabled=show_progress) as progress:
-        progress_status(progress, f"Preparing isolated child {child_args.suite} benchmark")
-        validate_suite(child_args.suite)
-        await run_benchmark_suite(child_args, progress=progress)
-
-
-async def run_benchmark_suite(args: BenchmarkArgs, *, progress: ProgressReporter | None = None) -> None:
-    requested_clients = parse_csv(args.clients)
-    requested_modes = parse_csv(args.modes)
-    if args.suite == ONE_UPSTREAM_SUITE:
-        await run_one_upstream_suite(args, progress=progress)
-    elif args.suite == REQUEST_BUILDER_SUITE:
-        await run_request_builder_suite(args, progress=progress)
-    elif args.suite == RESPONSE_STREAMING_SUITE:
-        await run_response_streaming_suite(args, progress=progress)
-    elif args.suite == PROXY_CONNECT_SUITE:
-        await run_proxy_connect_suite(args, progress=progress)
-    else:
-        clients, skipped = available_clients(requested_clients, requested_modes)
-        if not clients:
-            msg = f"No requested clients are available: {skipped}"
-            raise ValueError(msg)
-
-        if args.suite == CLIENT_CREATION_SUITE:
-            await run_client_creation_suite(args, clients, skipped, progress=progress)
-        elif args.suite == RESOURCE_BACKPRESSURE_SUITE:
-            await run_resource_backpressure_suite(args, clients, skipped, progress=progress)
-        elif args.suite == COMPRESSED_RESPONSE_SUITE:
-            await run_compressed_response_suite(args, clients, skipped, progress=progress)
-        else:
-            await run_request_suite(args, clients, skipped, progress=progress)
-
-
-async def run_request_suite(
-    args: BenchmarkArgs,
-    clients: list[ClientSpec],
-    skipped: dict[str, str],
-    *,
-    progress: ProgressReporter | None = None,
-) -> None:
-    progress_status(progress, "Building request benchmark plan")
-    scenario_map = scenarios()
-    requested_scenarios = parse_csv(args.scenarios)
-    concurrency_levels = parse_int_csv(args.concurrency)
-    validate_request_benchmark_args(
-        args,
-        requested_scenarios=requested_scenarios,
-        scenario_map=scenario_map,
-        concurrency_levels=concurrency_levels,
-    )
-    plan = build_plan(
-        clients=clients,
-        requested_scenarios=requested_scenarios,
-        scenario_map=scenario_map,
-        concurrency_levels=concurrency_levels,
-        repeats=args.repeats,
-        shuffle=not args.no_shuffle,
-        seed=args.seed,
-    )
-    results: list[RunResult] = []
-    settling_config = run_settling_config(os.environ)
-
-    progress_status(progress, "Starting local benchmark server")
-    async with benchmark_server() as base_url:
-        with progress_stage(progress, "Request runs", total=len(plan)) as progress_step:
-            for scenario, concurrency, spec, repeat in plan:
-                label = request_progress_label(
-                    mode=spec.mode,
-                    client=spec.name,
-                    scenario=scenario.name,
-                    concurrency=concurrency,
-                    repeat=repeat,
-                    repeats=args.repeats,
-                )
-                progress_step.update(label)
-                result = await run_once(
-                    spec=spec,
-                    base_url=base_url,
-                    scenario=scenario,
-                    concurrency=concurrency,
-                    requests=args.requests,
-                    repeat=repeat,
-                    warmup=args.warmup,
-                    max_redirects=args.max_redirects,
-                    progress=progress,
-                    progress_label=label,
-                )
-                results.append(result)
-                progress_step.advance(label)
-                await settle_after_run(result.client_stats, settling_config, progress=progress)
-
-    progress_status(progress, "Writing request benchmark reports")
-    write_reports(results, skipped, args, settling_config=settling_config)
-
-
-async def run_client_creation_suite(
-    args: BenchmarkArgs,
-    clients: list[ClientSpec],
-    skipped: dict[str, str],
-    *,
-    progress: ProgressReporter | None = None,
-) -> None:
-    progress_status(progress, "Building client lifecycle benchmark plan")
-    client_counts = parse_int_csv(args.client_counts)
-    validate_client_creation_args(args, client_counts=client_counts)
-    scenario = scenarios()["json-small"]
-    progress_status(progress, "Starting local benchmark server")
-    async with benchmark_server() as base_url:
-        results = await run_client_creation_benchmarks(
-            clients=clients,
-            base_url=base_url,
-            scenario=scenario,
-            iterations=args.iterations,
-            repeats=args.repeats,
-            client_counts=client_counts,
-            max_redirects=args.max_redirects,
-            shuffle=not args.no_shuffle,
-            seed=args.seed,
-            progress=progress,
-        )
-
-    progress_status(progress, "Writing client lifecycle reports")
-    write_creation_reports(results, skipped, args)
-
-
-async def run_resource_backpressure_suite(
-    args: BenchmarkArgs,
-    clients: list[ClientSpec],
-    skipped: dict[str, str],
-    *,
-    progress: ProgressReporter | None = None,
-) -> None:
-    progress_status(progress, "Building resource/backpressure benchmark plan")
-    resource_clients, resource_skipped = foghttp_resource_clients(clients)
-    skipped = {**skipped, **resource_skipped}
-    if not resource_clients:
-        msg = "resource-backpressure suite currently requires the foghttp client"
-        raise ValueError(msg)
-    case_map = resource_cases()
-    requested_cases = resource_scenario_names(args.scenarios)
-    concurrency_levels = parse_int_csv(args.concurrency)
-    validate_resource_backpressure_args(
-        args,
-        requested_cases=requested_cases,
-        case_map=case_map,
-        concurrency_levels=concurrency_levels,
-    )
-    cases = [case_map[name] for name in requested_cases]
-    progress_status(progress, "Starting local benchmark servers")
-    async with benchmark_server() as base_url, benchmark_server() as secondary_base_url:
-        results = await run_resource_backpressure_benchmarks(
-            clients=resource_clients,
-            base_url=base_url,
-            secondary_base_url=secondary_base_url,
-            cases=cases,
-            concurrency_levels=concurrency_levels,
-            requests=args.requests,
-            warmup=args.warmup,
-            repeats=args.repeats,
-            max_redirects=args.max_redirects,
-            shuffle=not args.no_shuffle,
-            seed=args.seed,
-            progress=progress,
-        )
-
-    progress_status(progress, "Writing resource/backpressure reports")
-    write_resource_reports(results, skipped, args)
-
-
-async def run_one_upstream_suite(
-    args: BenchmarkArgs,
-    *,
-    progress: ProgressReporter | None = None,
-) -> None:
-    progress_status(progress, "Building one-upstream benchmark plan")
-    requested_clients = parse_csv(args.clients)
-    requested_modes = parse_csv(args.modes)
-    clients, skipped = available_one_upstream_clients(requested_clients, requested_modes)
-    if not clients:
-        msg = "one-upstream suite requires foghttp, httpx, or httpxyz clients"
-        raise ValueError(msg)
-    case_map = one_upstream_cases()
-    requested_cases = one_upstream_scenario_names(args.scenarios)
-    concurrency_levels = parse_int_csv(args.concurrency)
-    validate_one_upstream_args(
-        args,
-        requested_cases=requested_cases,
-        case_map=case_map,
-        concurrency_levels=concurrency_levels,
-    )
-    cases = [case_map[name] for name in requested_cases]
-    settling_config = run_settling_config(os.environ)
-    progress_status(progress, "Starting local benchmark server")
-    async with benchmark_server() as base_url:
-        results = await run_one_upstream_benchmarks(
-            clients=clients,
-            base_url=base_url,
-            cases=cases,
-            concurrency_levels=concurrency_levels,
-            requests=args.requests,
-            warmup=args.warmup,
-            repeats=args.repeats,
-            shuffle=not args.no_shuffle,
-            seed=args.seed,
-            settling_config=settling_config,
-            progress=progress,
-        )
-
-    progress_status(progress, "Writing one-upstream reports")
-    write_one_upstream_reports(results, skipped, args, settling_config=settling_config)
-
-
-async def run_request_builder_suite(
-    args: BenchmarkArgs,
-    *,
-    progress: ProgressReporter | None = None,
-) -> None:
-    progress_status(progress, "Building request builder benchmark plan")
-    requested_clients = parse_csv(args.clients)
-    requested_modes = parse_csv(args.modes)
-    clients, skipped = available_request_builder_clients(requested_clients, requested_modes)
-    if not clients:
-        msg = "request-builder suite requires foghttp, httpx, or httpxyz clients"
-        raise ValueError(msg)
-    case_map = request_builder_cases()
-    requested_cases = request_builder_scenario_names(args.scenarios)
-    validate_request_builder_args(args, requested_cases=requested_cases, case_map=case_map)
-    cases = [case_map[name] for name in requested_cases]
-    base_url = "http://127.0.0.1:1"
-    if any(case.kind == "send-prepared" for case in cases):
-        progress_status(progress, "Starting local benchmark server")
-        async with benchmark_server() as server_base_url:
-            results = await run_request_builder_benchmarks(
-                clients=clients,
-                base_url=server_base_url,
-                cases=cases,
-                iterations=args.iterations,
-                warmup=args.warmup,
-                repeats=args.repeats,
-                shuffle=not args.no_shuffle,
-                seed=args.seed,
-                progress=progress,
-            )
-    else:
-        results = await run_request_builder_benchmarks(
-            clients=clients,
-            base_url=base_url,
-            cases=cases,
-            iterations=args.iterations,
-            warmup=args.warmup,
-            repeats=args.repeats,
-            shuffle=not args.no_shuffle,
-            seed=args.seed,
-            progress=progress,
-        )
-
-    progress_status(progress, "Writing request builder reports")
-    write_request_builder_reports(results, skipped, args)
-
-
-async def run_response_streaming_suite(
-    args: BenchmarkArgs,
-    *,
-    progress: ProgressReporter | None = None,
-) -> None:
-    progress_status(progress, "Building response streaming benchmark plan")
-    requested_clients = parse_csv(args.clients)
-    requested_modes = parse_csv(args.modes)
-    clients, skipped = available_streaming_clients(requested_clients, requested_modes)
-    if not clients:
-        msg = "response-streaming suite requires clients with comparable streaming support"
-        raise ValueError(msg)
-    case_map = streaming_cases()
-    requested_cases = streaming_scenario_names(args.scenarios)
-    concurrency_levels = parse_int_csv(args.concurrency)
-    requests = streaming_requests(args.requests)
-    report_args = response_streaming_report_args(args, requested_cases=requested_cases, requests=requests)
-    validate_streaming_args(
-        report_args,
-        requested_cases=requested_cases,
-        case_map=case_map,
-        concurrency_levels=concurrency_levels,
-        requests=requests,
-    )
-    cases = [case_map[name] for name in requested_cases]
-    progress_status(progress, "Starting local benchmark server")
-    async with benchmark_server() as base_url:
-        results = await run_response_streaming_benchmarks(
-            clients=clients,
-            base_url=base_url,
-            cases=cases,
-            concurrency_levels=concurrency_levels,
-            requests=requests,
-            warmup=args.warmup,
-            repeats=args.repeats,
-            shuffle=not args.no_shuffle,
-            seed=args.seed,
-            progress=progress,
-        )
-
-    progress_status(progress, "Writing response streaming reports")
-    write_streaming_reports(results, skipped, report_args)
-
-
-async def run_proxy_connect_suite(
-    args: BenchmarkArgs,
-    *,
-    progress: ProgressReporter | None = None,
-) -> None:
-    progress_status(progress, "Building proxy CONNECT benchmark plan")
-    requested_clients = parse_csv(args.clients)
-    requested_modes = parse_csv(args.modes)
-    clients, skipped = available_proxy_connect_clients(requested_clients, requested_modes)
-    if not clients:
-        msg = "proxy-connect suite requires foghttp, httpx, or httpxyz clients"
-        raise ValueError(msg)
-    case_map = proxy_connect_cases()
-    requested_cases = proxy_connect_scenario_names(args.scenarios)
-    concurrency_levels = proxy_connect_concurrency_levels(args.concurrency)
-    requests = proxy_connect_requests(args.requests)
-    warmup = proxy_connect_warmup(args.warmup)
-    report_args = proxy_connect_report_args(
-        args,
-        requested_cases=requested_cases,
-        requests=requests,
-        warmup=warmup,
-        concurrency_levels=concurrency_levels,
-    )
-    validate_proxy_connect_args(
-        report_args,
-        requested_cases=requested_cases,
-        case_map=case_map,
-        concurrency_levels=concurrency_levels,
-    )
-    cases = [case_map[name] for name in requested_cases]
-    progress_status(progress, "Starting local HTTP, HTTPS, and proxy benchmark servers")
-    async with (
-        benchmark_server() as http_base_url,
-        benchmark_tls_server() as tls_endpoint,
-        http_proxy_server() as proxy,
-    ):
-        endpoints = ProxyConnectEndpoints(
-            http_base_url=http_base_url,
-            https_base_url=tls_endpoint.base_url,
-            proxy_url=proxy.url,
-            ca_cert_path=tls_endpoint.ca_cert_path,
-        )
-        results = await run_proxy_connect_benchmarks(
-            clients=clients,
-            endpoints=endpoints,
-            proxy_stats=proxy.stats,
-            cases=cases,
-            concurrency_levels=concurrency_levels,
-            requests=requests,
-            warmup=warmup,
-            repeats=args.repeats,
-            shuffle=not args.no_shuffle,
-            seed=args.seed,
-            progress=progress,
-        )
-
-    progress_status(progress, "Writing proxy CONNECT reports")
-    write_proxy_connect_reports(results, skipped, report_args, proxy_url=proxy.url)
-
-
-def request_progress_label(
-    *,
-    mode: str,
-    client: str,
-    scenario: str,
-    concurrency: int,
-    repeat: int,
-    repeats: int,
-) -> str:
-    return f"{mode}/{client} {scenario} concurrency={concurrency} repeat={repeat}/{repeats}"
-
-
-def foghttp_resource_clients(clients: list[ClientSpec]) -> tuple[list[ClientSpec], dict[str, str]]:
-    selected: list[ClientSpec] = []
-    skipped: dict[str, str] = {}
-    for spec in clients:
-        if spec.name == "foghttp":
-            selected.append(spec)
-        else:
-            skipped[f"{spec.mode}:{spec.name}"] = "resource-backpressure suite requires FogHTTP stats"
-    return selected, skipped
-
-
-def resource_scenario_names(value: str) -> list[str]:
-    if value == DEFAULT_SCENARIOS:
-        return parse_csv(DEFAULT_RESOURCE_SCENARIOS)
-    return parse_csv(value)
-
-
-def one_upstream_scenario_names(value: str) -> list[str]:
-    if value == DEFAULT_SCENARIOS:
-        return parse_csv(DEFAULT_ONE_UPSTREAM_SCENARIOS)
-    return parse_csv(value)
-
-
-def request_builder_scenario_names(value: str) -> list[str]:
-    if value == DEFAULT_SCENARIOS:
-        return parse_csv(DEFAULT_REQUEST_BUILDER_SCENARIOS)
-    return parse_csv(value)
-
-
-def streaming_scenario_names(value: str) -> list[str]:
-    if value == DEFAULT_SCENARIOS:
-        return parse_csv(DEFAULT_STREAMING_SCENARIOS)
-    return parse_csv(value)
-
-
-def proxy_connect_scenario_names(value: str) -> list[str]:
-    if value == DEFAULT_SCENARIOS:
-        return parse_csv(DEFAULT_PROXY_CONNECT_SCENARIOS)
-    return parse_csv(value)
-
-
-def streaming_requests(value: int) -> int:
-    if value == DEFAULT_REQUESTS:
-        return DEFAULT_STREAMING_REQUESTS
-    return value
-
-
-def proxy_connect_requests(value: int) -> int:
-    if value == DEFAULT_REQUESTS:
-        return DEFAULT_PROXY_CONNECT_REQUESTS
-    return value
-
-
-def proxy_connect_warmup(value: int) -> int:
-    if value == DEFAULT_WARMUP:
-        return DEFAULT_PROXY_CONNECT_WARMUP
-    return value
-
-
-def proxy_connect_concurrency_levels(value: str) -> list[int]:
-    if value == DEFAULT_CONCURRENCY:
-        return parse_int_csv(DEFAULT_PROXY_CONNECT_CONCURRENCY)
-    return parse_int_csv(value)
-
-
-def response_streaming_report_args(
-    args: BenchmarkArgs,
-    *,
-    requested_cases: list[str],
-    requests: int,
-) -> BenchmarkArgs:
-    return replace(args, requests=requests, scenarios=",".join(requested_cases))
-
-
-def proxy_connect_report_args(
-    args: BenchmarkArgs,
-    *,
-    requested_cases: list[str],
-    requests: int,
-    warmup: int,
-    concurrency_levels: list[int],
-) -> BenchmarkArgs:
-    return replace(
-        args,
-        requests=requests,
-        warmup=warmup,
-        scenarios=",".join(requested_cases),
-        concurrency=",".join(str(level) for level in concurrency_levels),
-    )
-
-
-def parse_csv(value: str) -> list[str]:
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-def parse_int_csv(value: str) -> list[int]:
-    try:
-        return [int(item) for item in parse_csv(value)]
-    except ValueError as exc:
-        msg = f"invalid integer list: {value}"
-        raise ValueError(msg) from exc

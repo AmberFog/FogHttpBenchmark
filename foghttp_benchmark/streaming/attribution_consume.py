@@ -8,8 +8,16 @@ from http import HTTPStatus
 import time
 from typing import Protocol, cast
 
-from foghttp_benchmark.models import JsonObject
 from foghttp_benchmark.streaming.attribution_models import AttributionConfig
+from foghttp_benchmark.streaming.attribution_payloads import (
+    ChunkDistribution,
+    ChunkObservationPayload,
+    DeliverySample,
+    DiagnosticTrace,
+    FinalizedStreamSample,
+    ObservationBudgetPayload,
+    StreamError,
+)
 from foghttp_benchmark.streaming.protocols import AsyncStreamClient, AsyncStreamResponse
 
 
@@ -44,7 +52,7 @@ class ObservationBudget:
         self.histogram_bins += 1
         return True
 
-    def payload(self) -> JsonObject:
+    def payload(self) -> ObservationBudgetPayload:
         return {
             "record_cap": self.record_cap,
             "records": self.records,
@@ -72,8 +80,8 @@ class ChunkObservations:
     max_bytes: int | None = None
     histogram: dict[int, int] = field(default_factory=dict)
     histogram_complete: bool = True
-    delivery_samples: list[JsonObject] = field(default_factory=list)
-    trace: list[JsonObject] = field(default_factory=list)
+    delivery_samples: list[DeliverySample] = field(default_factory=list)
+    trace: list[DiagnosticTrace] = field(default_factory=list)
 
     def observe(self, chunk: bytes | memoryview, arrived_ns: int, started_ns: int) -> None:
         size = len(chunk)
@@ -113,9 +121,9 @@ class ChunkObservations:
             )
         self.previous_ns = arrived_ns
 
-    def payload(self) -> JsonObject:
+    def payload(self) -> ChunkObservationPayload:
         global_budget = self.budget is not None and self.budget.global_histogram is not None
-        distribution: JsonObject = {
+        distribution: ChunkDistribution = {
             "histogram": [{"size_bytes": size, "count": count} for size, count in sorted(self.histogram.items())],
             "complete": (
                 self.budget.global_histogram_complete if global_budget and self.budget else self.histogram_complete
@@ -171,9 +179,9 @@ class PendingStream:
     content_encoding: str | None = None
     transfer_encoding: str | None = None
     http_version: str | None = None
-    error: JsonObject | None = None
+    error: StreamError | None = None
 
-    def finalize(self, *, body_bytes: int, expected_digest: str) -> JsonObject:
+    def finalize(self, *, body_bytes: int, expected_digest: str) -> FinalizedStreamSample:
         # Finalization deliberately follows the enclosing batch's wall/CPU end.
         digest = self.digest.hexdigest()
         error = self.error

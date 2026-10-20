@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from foghttp_benchmark import cli
+from foghttp_benchmark.application import execution
 from foghttp_benchmark.streaming import lifecycle
 from foghttp_benchmark.streaming.attribution_models import AttributionConfig
 from foghttp_benchmark.streaming.lifecycle_models import (
@@ -30,7 +31,7 @@ CHUNK_CAP = 8
 
 def test_async_bytes_cli_preserves_explicit_measurement_conditions(monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
     result = CliRunner().invoke(
         cli.app,
         [
@@ -79,7 +80,7 @@ def test_async_bytes_cli_preserves_explicit_measurement_conditions(monkeypatch: 
 @pytest.mark.parametrize("profile", ["default", "lifecycle"])
 def test_bytes_options_cannot_be_silently_ignored(profile: str, monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
 
     result = CliRunner().invoke(
         cli.app,
@@ -102,12 +103,15 @@ def test_async_bytes_cannot_launch_without_verified_installation(
     tmp_path: Path,
 ) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "research_provenance_from_env", lambda **_: None)
-    monkeypatch.setattr(cli, "run_lifecycle_profile", run)
+    monkeypatch.setattr(execution, "research_provenance_from_env", lambda **_: None)
+    monkeypatch.setattr(execution, "run_lifecycle_profile", run)
 
     with pytest.raises(ValueError, match="RESEARCH_MANIFEST"):
         asyncio.run(
-            cli.run_benchmark(replace(lifecycle_args(tmp_path), streaming_profile="async-bytes"), show_progress=False),
+            execution.run_benchmark(
+                replace(lifecycle_args(tmp_path), streaming_profile="async-bytes"),
+                show_progress=False,
+            ),
         )
 
     run.assert_not_awaited()

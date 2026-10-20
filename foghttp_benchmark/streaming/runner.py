@@ -9,7 +9,6 @@ import inspect
 from queue import Empty, Queue
 import random
 import time
-from typing import cast
 
 from foghttp_benchmark.constants import ASYNC_MODE
 from foghttp_benchmark.progress import (
@@ -20,7 +19,7 @@ from foghttp_benchmark.progress import (
     progress_stage,
 )
 from foghttp_benchmark.resources import ResourceSampler
-from foghttp_benchmark.runner import percentile
+from foghttp_benchmark.statistics import percentile
 from foghttp_benchmark.streaming.models import (
     AsyncStreamingAdapter,
     StreamingCase,
@@ -132,7 +131,6 @@ async def run_streaming_case(
             collect=False,
             progress=progress,
             stage_name=f"Warmup streaming load: {label}",
-            mode=spec.mode,
         )
         async with ResourceSampler() as sampler:
             started = time.perf_counter()
@@ -145,7 +143,6 @@ async def run_streaming_case(
                 collect=True,
                 progress=progress,
                 stage_name=f"Measured streaming load: {label}",
-                mode=spec.mode,
             )
             duration = time.perf_counter() - started
         client_stats = client.stats()
@@ -205,10 +202,9 @@ async def run_load_with_progress(
     collect: bool,
     progress: ProgressReporter | None,
     stage_name: str,
-    mode: str,
 ) -> StreamingLoadResult:
     if requests == 0 or not is_progress_enabled(progress):
-        return await run_streaming_load(client, case, url, concurrency, requests, collect=collect, mode=mode)
+        return await run_streaming_load(client, case, url, concurrency, requests, collect=collect)
     with progress_stage(
         progress,
         stage_name,
@@ -223,7 +219,6 @@ async def run_load_with_progress(
             concurrency,
             requests,
             collect=collect,
-            mode=mode,
             progress=progress_step,
         )
 
@@ -236,15 +231,13 @@ async def run_streaming_load(
     requests: int,
     *,
     collect: bool,
-    mode: str,
     progress: ProgressStep | None = None,
 ) -> StreamingLoadResult:
     if requests == 0:
         return StreamingLoadResult([], [], 0, 0, 0, 0, 0, {})
-    if mode == ASYNC_MODE:
-        async_client = cast("AsyncStreamingAdapter", client)
+    if client.mode == ASYNC_MODE:
         return await run_async_streaming_load(
-            async_client,
+            client,
             case,
             url,
             concurrency,
@@ -252,10 +245,9 @@ async def run_streaming_load(
             collect=collect,
             progress=progress,
         )
-    sync_client = cast("SyncStreamingAdapter", client)
     return await asyncio.to_thread(
         run_sync_streaming_load,
-        sync_client,
+        client,
         case,
         url,
         concurrency,

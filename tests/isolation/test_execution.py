@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pytest import MonkeyPatch
 
+from foghttp_benchmark.application.composition import get_suite
 from foghttp_benchmark.constants import (
     BENCHMARK_SEED,
     DEFAULT_CLIENT_COUNTS,
@@ -23,6 +24,7 @@ from foghttp_benchmark.isolation.models import (
     ClientIsolationSelection,
 )
 from foghttp_benchmark.models import BenchmarkArgs
+from foghttp_benchmark.report_finalization import MergedReportFinalizer
 
 
 def test_isolated_benchmark_waits_between_child_processes(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
@@ -46,21 +48,36 @@ def test_isolated_benchmark_waits_between_child_processes(monkeypatch: MonkeyPat
     ) -> ChildProcessResult:
         return child_result(item)
 
-    monkeypatch.setattr(
-        execution,
-        "select_clients_for_isolation",
-        lambda _args: ClientIsolationSelection(["foghttp"], {}),
-    )
-    monkeypatch.setattr(execution, "build_isolation_plan", lambda _args, _clients: plan)
+    def fake_write(
+        _args: BenchmarkArgs,
+        child_results: list[ChildProcessResult],
+        _skipped: dict[str, str],
+        *,
+        child_cooldown_s: float,
+        finalizer: MergedReportFinalizer,
+    ) -> None:
+        assert child_cooldown_s > 0
+        assert finalizer is get_suite(args.suite).finalize_report
+        reports.append(child_results)
+
+    monkeypatch.setattr(execution, "build_isolation_plan", lambda _args, _clients, _scenarios: plan)
     monkeypatch.setattr(execution, "run_child_process", fake_run_child_process)
     monkeypatch.setattr(execution, "wait_between_children", fake_wait_between_children)
     monkeypatch.setattr(
         execution,
         "write_isolation_report",
-        lambda _args, child_results, _skipped, **_kwargs: reports.append(child_results),
+        fake_write,
     )
 
-    asyncio.run(execution.run_isolated_benchmark(args, progress=None))
+    asyncio.run(
+        execution.run_isolated_benchmark(
+            args,
+            select_clients=lambda _args: ClientIsolationSelection(["foghttp"], {}),
+            scenario_names=lambda _args: ["json-small"],
+            finalizer=get_suite(args.suite).finalize_report,
+            progress=None,
+        ),
+    )
 
     assert len(cooldowns) == len(plan) - 1
     assert [result.sequence for result in reports[0]] == [1, 2, 3]

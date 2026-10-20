@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from foghttp_benchmark import cli
+from foghttp_benchmark.application import execution
 from foghttp_benchmark.streaming import lifecycle
 from foghttp_benchmark.streaming.attribution_models import AttributionConfig, validate_attribution_config
 from foghttp_benchmark.streaming.lifecycle_models import LifecycleConfig, validate_lifecycle_config
@@ -56,7 +57,7 @@ def test_perf_rejects_missing_window_before_process_launch(batches: int, duratio
 @pytest.mark.parametrize("profile", ["default", "lifecycle"])
 def test_profiler_option_cannot_be_ignored(profile: str, monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
     result = CliRunner().invoke(cli.app, ["--streaming-profile", profile, "--streaming-profiler", "cprofile"])
     assert result.exit_code != 0
     run.assert_not_awaited()
@@ -113,7 +114,7 @@ def test_dense_frequency_requires_active_perf_backend(backend: str) -> None:
 @pytest.mark.parametrize("profile", ["default", "lifecycle"])
 def test_perf_frequency_option_cannot_be_ignored(profile: str, monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
     result = CliRunner().invoke(
         cli.app,
         ["--streaming-profile", profile, "--streaming-perf-sample-frequency-hz", "1999"],
@@ -124,7 +125,7 @@ def test_perf_frequency_option_cannot_be_ignored(profile: str, monkeypatch: pyte
 
 def test_dense_perf_cli_option_reaches_benchmark_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
     run = AsyncMock()
-    monkeypatch.setattr(cli, "run_benchmark", run)
+    monkeypatch.setattr(execution, "run_benchmark", run)
     result = CliRunner().invoke(
         cli.app,
         [

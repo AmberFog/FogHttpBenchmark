@@ -5,15 +5,15 @@ from dataclasses import dataclass
 
 from foghttp_benchmark.models import ResourceBackpressureResult
 from foghttp_benchmark.resource.reporting.metrics import (
-    client_stat_max,
-    coefficient_of_variation,
+    client_stat_values,
     error_rate,
     median_metric,
-    merge_error_types,
     optional_max,
     sum_metric,
 )
 from foghttp_benchmark.resource.reporting.models import ResourceAggregateRow
+from foghttp_benchmark.resource_metrics import resource_coverage
+from foghttp_benchmark.statistics import coefficient_of_variation, merge_error_types
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +70,15 @@ def build_aggregate_row(
 ) -> ResourceAggregateRow:
     requests_total = sum_metric(results, lambda result: result.requests)
     errors_total = sum_metric(results, lambda result: result.errors)
+    stats = {
+        "final_failed_requests_max": client_stat_values(results, "failed_requests"),
+        "final_pool_timeouts_max": client_stat_values(results, "pool_acquire_timeouts"),
+        "final_buffered_response_bytes_max": client_stat_values(results, "buffered_response_bytes"),
+        "final_buffered_response_budget_rejections_max": client_stat_values(
+            results,
+            "buffered_response_budget_rejections",
+        ),
+    }
     return ResourceAggregateRow(
         mode=key.mode,
         client=key.client,
@@ -98,14 +107,24 @@ def build_aggregate_row(
         peak_active_requests_max=optional_max(result.peak_active_requests for result in results),
         peak_pending_requests_max=optional_max(result.peak_pending_requests for result in results),
         peak_buffered_response_bytes_max=optional_max(result.peak_buffered_response_bytes for result in results),
-        final_failed_requests_max=client_stat_max(results, "failed_requests"),
-        final_pool_timeouts_max=client_stat_max(results, "pool_acquire_timeouts"),
-        final_buffered_response_bytes_max=client_stat_max(results, "buffered_response_bytes"),
-        final_buffered_response_budget_rejections_max=client_stat_max(
-            results,
-            "buffered_response_budget_rejections",
+        final_failed_requests_max=optional_max(stats["final_failed_requests_max"]),
+        final_pool_timeouts_max=optional_max(stats["final_pool_timeouts_max"]),
+        final_buffered_response_bytes_max=optional_max(stats["final_buffered_response_bytes_max"]),
+        final_buffered_response_budget_rejections_max=optional_max(
+            stats["final_buffered_response_budget_rejections_max"],
         ),
         recovery_failures=sum(1 for result in results if result.recovery_ok is False),
         error_types=merge_error_types(result.error_types for result in results),
         warmup_error_types=merge_error_types(result.warmup_error_types for result in results),
+        resource_coverage=resource_coverage(
+            {
+                "rss_mb_max": [result.peak_rss_mb for result in results],
+                "threads_max": [result.peak_threads for result in results],
+                "fds_max": [result.peak_fds for result in results],
+                "peak_active_requests_max": [result.peak_active_requests for result in results],
+                "peak_pending_requests_max": [result.peak_pending_requests for result in results],
+                "peak_buffered_response_bytes_max": [result.peak_buffered_response_bytes for result in results],
+                **stats,
+            },
+        ),
     )

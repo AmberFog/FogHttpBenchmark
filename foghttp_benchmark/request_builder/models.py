@@ -1,5 +1,7 @@
 __all__ = (
     "AsyncRequestBuilderAdapter",
+    "AsyncRequestBuilderClientFactory",
+    "AsyncRequestBuilderClientSpec",
     "BodyKind",
     "BuilderKind",
     "ParamsKind",
@@ -11,11 +13,16 @@ __all__ = (
     "RequestBuilderResult",
     "RequestBuilderStats",
     "SyncRequestBuilderAdapter",
+    "SyncRequestBuilderClientFactory",
+    "SyncRequestBuilderClientSpec",
 )
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeAlias
+
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
+from foghttp_benchmark.resource_metrics import ResourceCoverage
 
 
 BodyKind: TypeAlias = Literal["none", "json", "bytes"]
@@ -51,6 +58,9 @@ class RequestBuilderClientConfig:
 
 
 class AsyncRequestBuilderAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["async"]: ...
+
     def build(self, case: RequestBuilderCase, base_url: str) -> object: ...
 
     async def send(self, request: object) -> int: ...
@@ -59,6 +69,9 @@ class AsyncRequestBuilderAdapter(Protocol):
 
 
 class SyncRequestBuilderAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["sync"]: ...
+
     def build(self, case: RequestBuilderCase, base_url: str) -> object: ...
 
     def send(self, request: object) -> int: ...
@@ -66,17 +79,26 @@ class SyncRequestBuilderAdapter(Protocol):
     def close(self) -> None: ...
 
 
-RequestBuilderClientFactory: TypeAlias = Callable[
-    [RequestBuilderClientConfig],
-    AsyncRequestBuilderAdapter | SyncRequestBuilderAdapter,
-]
+AsyncRequestBuilderClientFactory: TypeAlias = Callable[[RequestBuilderClientConfig], AsyncRequestBuilderAdapter]
+SyncRequestBuilderClientFactory: TypeAlias = Callable[[RequestBuilderClientConfig], SyncRequestBuilderAdapter]
+RequestBuilderClientFactory: TypeAlias = AsyncRequestBuilderClientFactory | SyncRequestBuilderClientFactory
 
 
 @dataclass(frozen=True, slots=True)
-class RequestBuilderClientSpec:
+class AsyncRequestBuilderClientSpec:
     name: str
-    mode: str
-    factory: RequestBuilderClientFactory
+    factory: AsyncRequestBuilderClientFactory
+    mode: Literal["async"] = field(default=ASYNC_MODE, init=False)
+
+
+@dataclass(frozen=True, slots=True)
+class SyncRequestBuilderClientSpec:
+    name: str
+    factory: SyncRequestBuilderClientFactory
+    mode: Literal["sync"] = field(default=SYNC_MODE, init=False)
+
+
+RequestBuilderClientSpec: TypeAlias = AsyncRequestBuilderClientSpec | SyncRequestBuilderClientSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,8 +147,9 @@ class RequestBuilderAggregateRow:
     p50_ms_median: float
     p95_ms_median: float
     p99_ms_median: float
-    rss_mb_max: float
-    threads_max: int
-    fds_max: int
+    rss_mb_max: float | None
+    threads_max: int | None
+    fds_max: int | None
     errors_total: int
     error_types: dict[str, int]
+    resource_coverage: ResourceCoverage = field(default_factory=dict)

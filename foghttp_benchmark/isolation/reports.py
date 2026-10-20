@@ -1,18 +1,26 @@
-__all__ = ("write_isolation_report",)
+__all__ = ("ReportFinalizationError", "write_isolation_report")
 
+from copy import deepcopy
 from dataclasses import asdict
-import json
 from pathlib import Path
 import platform
 import sys
 import time
 from typing import cast
 
-from foghttp_benchmark.constants import PROXY_CONNECT_SUITE, RESPONSE_STREAMING_SUITE
 from foghttp_benchmark.isolation.models import PER_CLIENT_SCENARIO_ISOLATION, ChildProcessResult
+from foghttp_benchmark.measurement_timing import report_timing_scope
 from foghttp_benchmark.models import BenchmarkArgs, JsonObject
-from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.rendering import IsolationRenderContext, load_report_template, render_isolation_markdown
+from foghttp_benchmark.report_finalization import MergedReportFinalizer, MergedSuiteReport
+from foghttp_benchmark.report_publication import publish_report
+from foghttp_benchmark.report_schema.decoding import decode_report_payload, load_report
+from foghttp_benchmark.report_schema.identity import aggregate_identity, validate_unique_aggregate_rows
+from foghttp_benchmark.reports import package_versions
+from foghttp_benchmark.resource_metrics import RESOURCE_METRIC_SCHEMA_VERSION
+from foghttp_benchmark.validity.classification import combine_validity_summaries, validity_summary_from_metadata
 from foghttp_benchmark.validity.reports import metadata_with_validity
+from foghttp_benchmark.validity.serialization import validity_payload, validity_summary_from_payload
 
 
 def write_isolation_report(
@@ -21,11 +29,11 @@ def write_isolation_report(
     skipped: dict[str, str],
     *,
     child_cooldown_s: float,
+    finalizer: MergedReportFinalizer,
 ) -> None:
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    child_payloads = load_successful_child_payloads(child_results)
+    child_payloads = load_successful_child_payloads(child_results, expected_suite=args.suite)
     metadata = build_metadata(
         args=args,
         timestamp=timestamp,
@@ -34,42 +42,102 @@ def write_isolation_report(
         skipped=merge_skipped(skipped, child_payloads),
         child_cooldown_s=child_cooldown_s,
     )
-    aggregate_rows = normalize_aggregate_rows(args.suite, merge_payload_lists(child_payloads, "aggregate"))
+    aggregate_rows = merge_payload_lists(child_payloads, "aggregate")
     run_rows = merge_payload_lists(child_payloads, "runs")
+    child_validities = [
+        validity_summary_from_metadata(
+            report_metadata(payload),
+            args.suite,
+            merge_payload_lists([payload], "aggregate"),
+        )
+        for payload in child_payloads
+    ]
+    finalized = finalize_merged_data(args.suite, metadata, aggregate_rows, child_payloads, finalizer)
+    aggregate_rows = finalized.aggregate_rows
+    metadata.update(finalized.metadata)
+    decode_report_payload(
+        {"metadata": metadata, "aggregate": aggregate_rows, "runs": run_rows},
+        expected_suite=args.suite,
+    )
+    metadata = metadata_with_validity(metadata, aggregate_rows)
+    metadata["validity"] = validity_payload(
+        combine_validity_summaries(
+            [
+                validity_summary_from_payload(cast("JsonObject", metadata["validity"])),
+                *child_validities,
+            ],
+        ),
+    )
     payload: dict[str, object] = {
-        "metadata": metadata_with_validity(metadata, aggregate_rows),
+        "metadata": metadata,
         "aggregate": aggregate_rows,
         "runs": run_rows,
     }
-    json_path = output_dir / f"{timestamp}.json"
-    md_path = output_dir / f"{timestamp}.md"
-    latest_json = output_dir / "latest.json"
-    latest_md = output_dir / "latest.md"
+    markdown = render_isolation_markdown(
+        load_report_template("isolation_report.md.j2"),
+        IsolationRenderContext(
+            timestamp=timestamp,
+            args=args,
+            aggregate=aggregate_rows,
+            child_rows=[child_result_markdown_row(result) for result in child_results],
+            run_count=len(run_rows),
+            unit=isolation_unit(args),
+            validity=metadata["validity"],
+        ),
+    )
+    publish_report(output_dir, timestamp, payload, markdown)
 
-    json_text = json.dumps(payload, indent=2, sort_keys=True)
-    json_path.write_text(json_text + "\n")
-    latest_json.write_text(json_text + "\n")
 
-    markdown = render_isolation_markdown(timestamp, args, child_results, payload)
-    md_path.write_text(markdown)
-    latest_md.write_text(markdown)
+class ReportFinalizationError(ValueError):
+    pass
 
 
-def load_successful_child_payloads(child_results: list[ChildProcessResult]) -> list[JsonObject]:
+def finalize_merged_data(
+    suite: str,
+    metadata: JsonObject,
+    rows: list[JsonObject],
+    child_payloads: list[JsonObject],
+    finalizer: MergedReportFinalizer,
+) -> MergedSuiteReport:
+    identities = [aggregate_identity(suite, row) for row in rows]
+    result = finalizer(deepcopy(rows), deepcopy([report_metadata(payload) for payload in child_payloads]))
+    validate_unique_aggregate_rows(suite, result.aggregate_rows)
+    if [aggregate_identity(suite, row) for row in result.aggregate_rows] != identities:
+        msg = "Suite finalization must preserve aggregate identities and order"
+        raise ReportFinalizationError(msg)
+    reserved = metadata.keys() | {
+        "validity",
+        "report_schema_version",
+        "research_provenance",
+        "package_sources",
+        "timing_scope",
+        "resource_metric_schema_version",
+        "run_settling",
+    }
+    conflicts = sorted(result.metadata.keys() & reserved)
+    if conflicts:
+        msg = f"Suite finalization cannot replace common metadata: {', '.join(conflicts)}"
+        raise ReportFinalizationError(msg)
+    return result
+
+
+def load_successful_child_payloads(
+    child_results: list[ChildProcessResult],
+    *,
+    expected_suite: str,
+) -> list[JsonObject]:
     payloads: list[JsonObject] = []
+    aggregate_rows: list[JsonObject] = []
+    sources: list[str] = []
     for result in child_results:
         if result.returncode != 0 or result.report_path is None:
             continue
-        payloads.append(load_json_object(Path(result.report_path)))
+        report = load_report(Path(result.report_path), expected_suite=expected_suite)
+        payloads.append({"metadata": report.metadata, "aggregate": report.aggregate_rows, "runs": report.run_rows})
+        aggregate_rows.extend(report.aggregate_rows)
+        sources.extend(f"{result.report_path}:aggregate[{index}]" for index in range(len(report.aggregate_rows)))
+    validate_unique_aggregate_rows(expected_suite, aggregate_rows, sources=sources)
     return payloads
-
-
-def load_json_object(path: Path) -> JsonObject:
-    value = json.loads(path.read_text())
-    if not isinstance(value, dict):
-        msg = f"{path} must contain a JSON object"
-        raise TypeError(msg)
-    return cast("JsonObject", value)
 
 
 def build_metadata(
@@ -105,6 +173,13 @@ def build_metadata(
             "children": child_diagnostics(child_results, child_payloads),
         },
     }
+    if child_payloads:
+        metadata["timing_scope"] = merged_timing_scope(args.suite, child_payloads)
+        if all(
+            report_metadata(payload).get("resource_metric_schema_version") == RESOURCE_METRIC_SCHEMA_VERSION
+            for payload in child_payloads
+        ):
+            metadata["resource_metric_schema_version"] = RESOURCE_METRIC_SCHEMA_VERSION
     for key in ("package_sources", "research_provenance"):
         for payload in child_payloads:
             child_metadata = payload.get("metadata")
@@ -114,33 +189,23 @@ def build_metadata(
     run_settling = first_metadata.get("run_settling")
     if isinstance(run_settling, dict):
         metadata["run_settling"] = run_settling
-    if args.suite == RESPONSE_STREAMING_SUITE:
-        metadata.update(streaming_metadata(child_payloads))
     return metadata
 
 
-def streaming_metadata(child_payloads: list[JsonObject]) -> JsonObject:
-    children = [report_metadata(payload) for payload in child_payloads]
-    merged: JsonObject = {}
-    for key in ("measurement_scope", "streaming_metric_schema_version", "bytes_payload_policy"):
-        values = [child.get(key) for child in children]
-        if any(key in child for child in children):
-            if any(value != values[0] for value in values) or any(key not in child for child in children):
-                msg = f"Isolated streaming children disagree on {key}"
-                raise ValueError(msg)
-            merged[key] = values[0]
-    for key in ("throughput_scopes", "timing_scopes"):
-        if not any(key in child for child in children):
-            continue
-        scopes: set[str] = set()
-        for child in children:
-            value = child.get(key)
-            if not isinstance(value, list) or any(not isinstance(scope, str) for scope in value):
-                msg = f"Isolated streaming child field {key} must be a list of strings"
-                raise ValueError(msg)
-            scopes.update(str(scope) for scope in value)
-        merged[key] = sorted(scopes)
-    return merged
+def merged_timing_scope(suite: str, child_payloads: list[JsonObject]) -> str:
+    scopes = [
+        report_timing_scope(
+            suite,
+            report_metadata(payload),
+            merge_payload_lists([payload], "aggregate"),
+            runs=merge_payload_lists([payload], "runs"),
+        )
+        for payload in child_payloads
+    ]
+    if any(scope != scopes[0] for scope in scopes):
+        msg = "Isolated children disagree on timing scope"
+        raise ValueError(msg)
+    return scopes[0].value
 
 
 def isolation_unit(args: BenchmarkArgs) -> str:
@@ -173,61 +238,6 @@ def merge_payload_lists(child_payloads: list[JsonObject], key: str) -> list[Json
     return merged
 
 
-def normalize_aggregate_rows(suite: str, rows: list[JsonObject]) -> list[JsonObject]:
-    if suite != PROXY_CONNECT_SUITE:
-        return rows
-    return proxy_connect_rows_with_direct_ratios(rows)
-
-
-def proxy_connect_rows_with_direct_ratios(rows: list[JsonObject]) -> list[JsonObject]:
-    baselines: dict[tuple[str, str, str, int], float] = {}
-    for row in rows:
-        value = row.get("ok_req_s_median")
-        if (
-            row.get("config") == "direct"
-            and row.get("lifecycle") == "reused-client"
-            and isinstance(
-                value,
-                int | float,
-            )
-        ):
-            baselines[proxy_connect_baseline_key(row)] = float(value)
-    normalized: list[JsonObject] = []
-    for row in rows:
-        normalized_row = dict(row)
-        value = normalized_row.get("ok_req_s_median")
-        if isinstance(value, int | float):
-            normalized_row["direct_ratio"] = direct_ratio(
-                float(value),
-                baselines.get(proxy_connect_baseline_key(normalized_row)),
-            )
-        normalized.append(normalized_row)
-    return normalized
-
-
-def proxy_connect_baseline_key(row: JsonObject) -> tuple[str, str, str, int]:
-    return (
-        str(row.get("mode", "")),
-        str(row.get("client", "")),
-        str(row.get("target_scheme", "")),
-        int_value(row.get("concurrency")),
-    )
-
-
-def direct_ratio(value: float, baseline: float | None) -> float | None:
-    if baseline is None or baseline <= 0:
-        return None
-    return value / baseline
-
-
-def int_value(value: object) -> int:
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    return 0
-
-
 def merge_skipped(parent_skipped: dict[str, str], child_payloads: list[JsonObject]) -> dict[str, str]:
     merged = dict(parent_skipped)
     for payload in child_payloads:
@@ -253,7 +263,7 @@ def child_diagnostics(
         if result.returncode == 0 and result.report_path is not None:
             child_metadata = next(successful_payloads).get("metadata")
             if isinstance(child_metadata, dict):
-                for key in ("package_sources", "research_provenance"):
+                for key in ("package_sources", "research_provenance", "resource_metric_schema_version", "validity"):
                     if key in child_metadata:
                         payload[key] = child_metadata[key]
         diagnostics.append(payload)
@@ -263,30 +273,6 @@ def child_diagnostics(
 def child_result_payload(result: ChildProcessResult) -> JsonObject:
     payload = asdict(result)
     return cast("JsonObject", payload)
-
-
-def render_isolation_markdown(
-    timestamp: str,
-    args: BenchmarkArgs,
-    child_results: list[ChildProcessResult],
-    payload: dict[str, object],
-) -> str:
-    aggregate = payload.get("aggregate", [])
-    runs = payload.get("runs", [])
-    metadata = payload.get("metadata")
-    validity = metadata.get("validity") if isinstance(metadata, dict) else None
-    aggregate_count = len(aggregate) if isinstance(aggregate, list) else 0
-    run_count = len(runs) if isinstance(runs, list) else 0
-    template = report_environment().get_template("isolation_report.md.j2")
-    return template.render(
-        aggregate_count=aggregate_count,
-        args=args,
-        child_rows=[child_result_markdown_row(result) for result in child_results],
-        run_count=run_count,
-        timestamp=timestamp,
-        unit=isolation_unit(args),
-        validity=validity,
-    )
 
 
 def child_result_markdown_row(result: ChildProcessResult) -> str:
@@ -301,11 +287,11 @@ def child_result_markdown_row(result: ChildProcessResult) -> str:
 
 def optional_float(value: float | None) -> str:
     if value is None:
-        return "-"
+        return "unavailable"
     return f"{value:.1f}"
 
 
 def optional_int(value: int | None) -> str:
     if value is None:
-        return "-"
+        return "unavailable"
     return str(value)

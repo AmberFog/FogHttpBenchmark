@@ -1,9 +1,10 @@
+import asyncio
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from foghttp_benchmark import cli
+from foghttp_benchmark.application import composition, execution
 from foghttp_benchmark.isolation.models import CHILD_PROCESS_ISOLATION
 from foghttp_benchmark.models import BenchmarkArgs, JsonObject
 from foghttp_benchmark.validity import reports as validity_reports
@@ -26,13 +27,13 @@ def test_research_preflight_runs_before_any_benchmark_work(
     async def unexpected_work(args: BenchmarkArgs, **_kwargs: object) -> None:
         work.append(args)
 
-    monkeypatch.setattr(cli, "research_provenance_from_env", failed_preflight)
-    monkeypatch.setattr(cli, "run_isolated_benchmark", unexpected_work)
-    monkeypatch.setattr(cli, "run_benchmark_suite", unexpected_work)
-    run = cli.run_benchmark if entrypoint == "parent" else cli.run_benchmark_child
+    monkeypatch.setattr(execution, "research_provenance_from_env", failed_preflight)
+    monkeypatch.setattr(execution, "run_isolated_benchmark", unexpected_work)
+    monkeypatch.setattr(composition, "run_benchmark_suite", unexpected_work)
+    run = execution.run_benchmark if entrypoint == "parent" else execution.run_benchmark_child
 
     with pytest.raises(ValueError, match="does not match the release wheel"):
-        cli.asyncio.run(run(benchmark_args(tmp_path), show_progress=False))
+        asyncio.run(run(benchmark_args(tmp_path), show_progress=False))
 
     assert checks == [entrypoint == "parent"]
     assert work == []
@@ -55,13 +56,13 @@ def test_verified_preflight_continues_into_existing_run_path(
     async def fake_work(args: BenchmarkArgs, **_kwargs: object) -> None:
         work.append(args)
 
-    monkeypatch.setattr(cli, "research_provenance_from_env", verified_preflight)
-    monkeypatch.setattr(cli, "run_isolated_benchmark", fake_work)
-    monkeypatch.setattr(cli, "run_benchmark_suite", fake_work)
+    monkeypatch.setattr(execution, "research_provenance_from_env", verified_preflight)
+    monkeypatch.setattr(execution, "run_isolated_benchmark", fake_work)
+    monkeypatch.setattr(composition, "run_benchmark_suite", fake_work)
     args = benchmark_args(tmp_path)
-    run = cli.run_benchmark if entrypoint == "parent" else cli.run_benchmark_child
+    run = execution.run_benchmark if entrypoint == "parent" else execution.run_benchmark_child
 
-    cli.asyncio.run(run(args, show_progress=False))
+    asyncio.run(run(args, show_progress=False))
 
     assert checks == [entrypoint == "parent"]
     expected_args = args if entrypoint == "parent" else replace(args, isolation=CHILD_PROCESS_ISOLATION)

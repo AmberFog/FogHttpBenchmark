@@ -1,0 +1,1501 @@
+{
+  "compare_report.md.j2": {
+    "comparison": {
+      "by_mode": [
+        {
+          "name": "sync",
+          "p95_geomean_ratio": null,
+          "p99_geomean_ratio": 0.0,
+          "primary_geomean_ratio": 1.125,
+          "primary_median_ratio": 1.25,
+          "rows": 2
+        },
+        {
+          "name": "async",
+          "p95_geomean_ratio": null,
+          "p99_geomean_ratio": 0.0,
+          "primary_geomean_ratio": 1.125,
+          "primary_median_ratio": 1.25,
+          "rows": 2
+        }
+      ],
+      "by_scenario": [
+        {
+          "name": "z-case",
+          "p95_geomean_ratio": null,
+          "p99_geomean_ratio": 0.0,
+          "primary_geomean_ratio": 1.125,
+          "primary_median_ratio": 1.25,
+          "rows": 2
+        },
+        {
+          "name": "a-case",
+          "p95_geomean_ratio": null,
+          "p99_geomean_ratio": 0.0,
+          "primary_geomean_ratio": 1.125,
+          "primary_median_ratio": 1.25,
+          "rows": 2
+        }
+      ],
+      "metadata": {
+        "comparison_axis": null,
+        "focus_client": "foghttp",
+        "new_focus_version": "0.4.2",
+        "new_path": "new/latest.json",
+        "new_timestamp": "2030-01-02T03:04:05Z",
+        "old_focus_version": "0.4.1",
+        "old_path": "old/latest.json",
+        "old_timestamp": "2029-12-31T23:59:59Z",
+        "suite": "requests"
+      },
+      "new_error_rows": [
+        {
+          "error_rate_percent": 1.5625,
+          "errors_total": 1,
+          "label": "async / foghttp / z-case",
+          "warmup_errors_total": 0
+        }
+      ],
+      "overall": {
+        "name": "overall",
+        "p95_geomean_ratio": null,
+        "p99_geomean_ratio": 0.0,
+        "primary_geomean_ratio": 1.125,
+        "primary_median_ratio": 1.25,
+        "rows": 2
+      },
+      "resource_coverage": [
+        {
+          "label": "async / foghttp|\u0441\u0442\u0440\u043e\u043a\u0430\nnext",
+          "new": {
+            "rss_mb_max": {
+              "available": 2,
+              "expected": 3
+            }
+          },
+          "new_unavailable_reasons": {
+            "rss_mb_max": [
+              "unsupported"
+            ]
+          },
+          "old": {
+            "rss_mb_max": {
+              "available": 0,
+              "expected": 3
+            }
+          },
+          "old_unavailable_reasons": {
+            "rss_mb_max": [
+              "denied|probe\r\nretry"
+            ]
+          }
+        }
+      ],
+      "resource_summary": {
+        "comparable": false,
+        "incomparable_reason": "different process scopes",
+        "new_errors_total": 1,
+        "new_fds_max": 0,
+        "new_measurement_scope": "new-scope",
+        "new_rss_mb_max": 0,
+        "new_threads_max": null,
+        "old_errors_total": 0,
+        "old_fds_max": 12,
+        "old_measurement_scope": "old-scope",
+        "old_rss_mb_max": null,
+        "old_threads_max": 0
+      },
+      "top_improvements": [
+        {
+          "new_errors_total": 1,
+          "new_p95_ms": 0,
+          "new_primary": 125,
+          "old_errors_total": 0,
+          "old_p95_ms": null,
+          "old_primary": 100,
+          "p95_ratio": null,
+          "primary_ratio": 1.25,
+          "row": {
+            "label": "async / foghttp / z-case"
+          }
+        }
+      ],
+      "top_regressions": [
+        {
+          "new_errors_total": 1,
+          "new_p95_ms": 0,
+          "new_primary": 125,
+          "old_errors_total": 0,
+          "old_p95_ms": null,
+          "old_primary": 100,
+          "p95_ratio": null,
+          "primary_ratio": 0.75,
+          "row": {
+            "label": "sync / foghttp / a-case"
+          }
+        }
+      ],
+      "unmatched_new_rows": 0,
+      "unmatched_old_rows": 1,
+      "validity": {
+        "blocks_strong_conclusions": true,
+        "new_reason_count": 1,
+        "new_reasons": [
+          "unstable"
+        ],
+        "new_status": "needs-rerun",
+        "old_reason_count": 0,
+        "old_reasons": [],
+        "old_status": "valid"
+      },
+      "wins": null
+    }
+  },
+  "creation_report.md.j2": {
+    "aggregate": [
+      {
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "client": "foghttp",
+        "client_count": 3,
+        "close_p50_ms_median": null,
+        "concurrency": 4,
+        "end_fds_delta_max": 0,
+        "end_rss_delta_mb_max": 0,
+        "end_threads_delta_max": 0,
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "iterations": 100,
+        "mode": "async",
+        "ops_s_cv_percent": null,
+        "ops_s_median": 1234.125,
+        "p50_ms_median": 0.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "peak_fds_delta_max": null,
+        "peak_rss_delta_mb_max": null,
+        "peak_threads_delta_max": 2,
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "threads_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      },
+      {
+        "case": "a-case",
+        "client": "httpx",
+        "client_count": 3,
+        "close_p50_ms_median": null,
+        "concurrency": 4,
+        "end_fds_delta_max": 0,
+        "end_rss_delta_mb_max": 0,
+        "end_threads_delta_max": 0,
+        "error_rate_percent": 1.5625,
+        "error_types": {},
+        "errors_total": 0,
+        "fds_max": 0,
+        "iterations": 100,
+        "mode": "sync",
+        "ops_s_cv_percent": null,
+        "ops_s_median": 1234.125,
+        "p50_ms_median": 0.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "peak_fds_delta_max": null,
+        "peak_rss_delta_mb_max": null,
+        "peak_threads_delta_max": 2,
+        "request_limit": 8,
+        "resource_coverage": {},
+        "rss_mb_max": 0,
+        "scenario": "a-first",
+        "threads_max": null,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "platform_name": "FixtureOS-42-test",
+    "python_version": "3.11.99-fixture",
+    "skipped": {
+      "a-unsupported": "unsupported platform",
+      "z-missing": "optional native module absent"
+    },
+    "timestamp": "2030-01-02T03:04:05Z",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  },
+  "isolation_report.md.j2": {
+    "aggregate": [
+      {
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "client": "foghttp",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "mode": "async",
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "threads_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "aggregate_count": 1,
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "child_rows": [
+      "| 2 | foghttp | z-case | 0 | 1.250 | unavailable | 0 | 4 | z/latest.json |",
+      "| 1 | httpx | a-case | 1 | 0.000 | 0.0 | unavailable | 0 | a/latest.json |"
+    ],
+    "run_count": 2,
+    "timestamp": "2030-01-02T03:04:05Z",
+    "unit": "client/scenario",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  },
+  "one_upstream_report.md.j2": {
+    "aggregate": [
+      {
+        "baseline_ratio": null,
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "client": "foghttp",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "group": "defaults",
+        "mode": "async",
+        "ok_req_s_median": 125.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "profile": "control",
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "threads_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      },
+      {
+        "baseline_ratio": null,
+        "case": "a-case",
+        "client": "httpx",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {},
+        "errors_total": 0,
+        "fds_max": 0,
+        "group": "defaults",
+        "mode": "sync",
+        "ok_req_s_median": 125.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "profile": "control",
+        "request_limit": 8,
+        "resource_coverage": {},
+        "rss_mb_max": 0,
+        "scenario": "a-first",
+        "threads_max": null,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "platform_name": "FixtureOS-42-test",
+    "python_version": "3.11.99-fixture",
+    "skipped": {
+      "a-unsupported": "unsupported platform",
+      "z-missing": "optional native module absent"
+    },
+    "timestamp": "2030-01-02T03:04:05Z",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  },
+  "proxy_connect_report.md.j2": {
+    "aggregate": [
+      {
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "client": "foghttp",
+        "concurrency": 4,
+        "config": "proxy",
+        "direct_ratio": null,
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "final_connections_aborted_max": 0,
+        "final_connections_closed_max": null,
+        "final_connections_opened_max": 4,
+        "final_connections_reused_max": 2,
+        "lifecycle": "persistent",
+        "measured_proxy_connect_requests_max": 4,
+        "measured_proxy_http_requests_max": 0,
+        "mode": "async",
+        "ok_req_s_median": 125.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "proxy_authorization_headers_max": 0,
+        "req_s_cv_percent": 2.125,
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "target_scheme": "https",
+        "threads_max": 0,
+        "total_proxy_connect_requests_max": 6,
+        "total_proxy_http_requests_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      },
+      {
+        "case": "a-case",
+        "client": "httpx",
+        "concurrency": 4,
+        "config": "proxy",
+        "direct_ratio": null,
+        "error_rate_percent": 1.5625,
+        "error_types": {},
+        "errors_total": 0,
+        "fds_max": 0,
+        "final_connections_aborted_max": 0,
+        "final_connections_closed_max": null,
+        "final_connections_opened_max": 4,
+        "final_connections_reused_max": 2,
+        "lifecycle": "persistent",
+        "measured_proxy_connect_requests_max": 4,
+        "measured_proxy_http_requests_max": 0,
+        "mode": "sync",
+        "ok_req_s_median": 125.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "proxy_authorization_headers_max": 0,
+        "req_s_cv_percent": 2.125,
+        "request_limit": 8,
+        "resource_coverage": {},
+        "rss_mb_max": 0,
+        "scenario": "a-first",
+        "target_scheme": "https",
+        "threads_max": null,
+        "total_proxy_connect_requests_max": 6,
+        "total_proxy_http_requests_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "platform_name": "FixtureOS-42-test",
+    "proxy_url": "http://127.0.0.1:8765",
+    "python_version": "3.11.99-fixture",
+    "skipped": {
+      "a-unsupported": "unsupported platform",
+      "z-missing": "optional native module absent"
+    },
+    "timestamp": "2030-01-02T03:04:05Z",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  },
+  "report.md.j2": {
+    "aggregate": [
+      {
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "client": "foghttp",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "mode": "async",
+        "ok_req_s_median": 125.125,
+        "p50_ms_median": 0.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "req_s_cv_percent": 2.125,
+        "req_s_median": 126.25,
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "threads_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      },
+      {
+        "case": "a-case",
+        "client": "httpx",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {},
+        "errors_total": 0,
+        "fds_max": 0,
+        "mode": "sync",
+        "ok_req_s_median": 125.125,
+        "p50_ms_median": 0.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "req_s_cv_percent": 2.125,
+        "req_s_median": 126.25,
+        "request_limit": 8,
+        "resource_coverage": {},
+        "rss_mb_max": 0,
+        "scenario": "a-first",
+        "threads_max": null,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "platform_name": "FixtureOS-42-test",
+    "python_version": "3.11.99-fixture",
+    "skipped": {
+      "a-unsupported": "unsupported platform",
+      "z-missing": "optional native module absent"
+    },
+    "timestamp": "2030-01-02T03:04:05Z",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  },
+  "request_builder_report.md.j2": {
+    "aggregate": [
+      {
+        "baseline_ratio": null,
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "client": "foghttp",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "group": "defaults",
+        "iterations": 100,
+        "kind": "build",
+        "mode": "async",
+        "ops_s_median": 1234.125,
+        "p50_ms_median": 0.000125,
+        "p95_ms_median": 0.00125,
+        "p99_ms_median": 0.0025,
+        "profile": "control",
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "threads_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      },
+      {
+        "baseline_ratio": null,
+        "case": "a-case",
+        "client": "httpx",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {},
+        "errors_total": 0,
+        "fds_max": 0,
+        "group": "defaults",
+        "iterations": 100,
+        "kind": "build",
+        "mode": "sync",
+        "ops_s_median": 1234.125,
+        "p50_ms_median": 0.000125,
+        "p95_ms_median": 0.00125,
+        "p99_ms_median": 0.0025,
+        "profile": "control",
+        "request_limit": 8,
+        "resource_coverage": {},
+        "rss_mb_max": 0,
+        "scenario": "a-first",
+        "threads_max": null,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "platform_name": "FixtureOS-42-test",
+    "python_version": "3.11.99-fixture",
+    "skipped": {
+      "a-unsupported": "unsupported platform",
+      "z-missing": "optional native module absent"
+    },
+    "timestamp": "2030-01-02T03:04:05Z",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  },
+  "resource_report.md.j2": {
+    "aggregate": [
+      {
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "client": "foghttp",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "final_buffered_response_budget_rejections_max": null,
+        "final_buffered_response_bytes_max": 0,
+        "final_pool_timeouts_max": 0,
+        "max_buffered_response_bytes": null,
+        "max_pending_requests": 12,
+        "mode": "async",
+        "ok_requests_total": 63,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "peak_active_requests_max": 4,
+        "peak_buffered_response_bytes_max": null,
+        "peak_pending_requests_max": 0,
+        "per_origin_request_limit": null,
+        "recovery_failures": 1,
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "threads_max": 0,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      },
+      {
+        "case": "a-case",
+        "client": "httpx",
+        "concurrency": 4,
+        "error_rate_percent": 1.5625,
+        "error_types": {},
+        "errors_total": 0,
+        "fds_max": 0,
+        "final_buffered_response_budget_rejections_max": null,
+        "final_buffered_response_bytes_max": 0,
+        "final_pool_timeouts_max": 0,
+        "max_buffered_response_bytes": null,
+        "max_pending_requests": 12,
+        "mode": "sync",
+        "ok_requests_total": 63,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "peak_active_requests_max": 4,
+        "peak_buffered_response_bytes_max": null,
+        "peak_pending_requests_max": 0,
+        "per_origin_request_limit": null,
+        "recovery_failures": 1,
+        "request_limit": 8,
+        "resource_coverage": {},
+        "rss_mb_max": 0,
+        "scenario": "a-first",
+        "threads_max": null,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "platform_name": "FixtureOS-42-test",
+    "python_version": "3.11.99-fixture",
+    "skipped": {
+      "a-unsupported": "unsupported platform",
+      "z-missing": "optional native module absent"
+    },
+    "timestamp": "2030-01-02T03:04:05Z",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  },
+  "streaming_attribution_report.md.j2": {
+    "aggregate": [
+      {
+        "case": "z-case",
+        "chunk_bytes_max": 1024,
+        "chunk_bytes_min": 0,
+        "client": "foghttp",
+        "complete_streams_total": 3,
+        "concurrency": 4,
+        "cpu": {
+          "client": {
+            "cpu_seconds_per_verified_byte_median": 0.000125,
+            "cpu_seconds_per_wall_second_median": 0.5,
+            "system_s_median": 0.0,
+            "user_s_median": 0.125
+          },
+          "server": {
+            "cpu_seconds_per_verified_byte_median": null,
+            "cpu_seconds_per_wall_second_median": null,
+            "system_s_median": null,
+            "user_s_median": null
+          }
+        },
+        "duration_window_complete": false,
+        "errors_total": 1,
+        "expected_streams_total": 4,
+        "first_item_p95_ms": null,
+        "gap_p95_ms": 0.125,
+        "gap_sample_count": 3,
+        "load_duration_s_max": 1.5,
+        "load_duration_s_min": 1.25,
+        "overhead": {
+          "combined_s_median": null,
+          "complete": true,
+          "distribution_complete": false,
+          "scalar_only_s_median": 0.0,
+          "sha256_only_s_median": 0.125
+        },
+        "p95_ms_median": 2.5,
+        "repeats": 3,
+        "resources": {
+          "client": {
+            "lifetime_high_water_rss_bytes_max": 16384,
+            "sampled_peak_fds_max": 4,
+            "sampled_peak_rss_bytes_max": 8192,
+            "sampled_peak_threads_max": 0
+          },
+          "server": {
+            "lifetime_high_water_rss_bytes_max": null,
+            "sampled_peak_fds_max": 0,
+            "sampled_peak_rss_bytes_max": null,
+            "sampled_peak_threads_max": 2
+          }
+        },
+        "total_observed_bytes": 4096,
+        "verified_bytes_s_cv_percent": null,
+        "verified_bytes_s_median": 1024.125,
+        "verified_bytes_total": 3072
+      }
+    ],
+    "metadata": {
+      "attribution_limits": {
+        "cpu": "CPU is process-wide.",
+        "overhead": "Replay is diagnostic.",
+        "reason": "Attribution is limited.",
+        "rss": "RSS is sampled."
+      },
+      "comparison_policy": "Compare only identical lifecycle configurations.",
+      "condition_fingerprint": "fixture-sha256",
+      "config": {
+        "clients": "foghttp,httpx",
+        "payload_bytes": 1024,
+        "read_bytes": null
+      },
+      "harness_source": {
+        "module_file": "fixture-checkout/foghttp_benchmark/streaming/lifecycle.py"
+      },
+      "lifecycle": {
+        "cases": [
+          {
+            "case": "z-case",
+            "client": "foghttp",
+            "client_pid": 101,
+            "concurrency": 4,
+            "failure": null,
+            "mode": "async",
+            "parent_pid": 100,
+            "repeat": 1,
+            "sequence": 2,
+            "server_pid": 102,
+            "worker_status": "ok"
+          },
+          {
+            "case": "a-case",
+            "client": "httpx",
+            "client_pid": 103,
+            "concurrency": 1,
+            "failure": "incomplete EOF",
+            "mode": "sync",
+            "parent_pid": 100,
+            "repeat": 1,
+            "sequence": 1,
+            "server_pid": 104,
+            "worker_status": "failed"
+          }
+        ]
+      },
+      "measurement_scope": "separate-client-server-processes-v1",
+      "package_sources": {
+        "foghttp": {
+          "source_sha": "0000000000000000000000000000000000000000",
+          "version": "0.4.2"
+        }
+      },
+      "package_versions": {
+        "foghttp": "0.4.2",
+        "httpx": "0.28.1"
+      },
+      "policy_version": 2,
+      "raw_evidence": [
+        {
+          "path": "raw/two.json",
+          "sequence": 2,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 125
+        },
+        {
+          "path": "raw/one.json",
+          "sequence": 1,
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "size_bytes": 0
+        }
+      ],
+      "sampling": {
+        "interval_s": 0.05,
+        "limitations": "Sampled peaks do not establish complete bounds."
+      },
+      "schema_version": 3,
+      "timing_scope": "load-only-v2",
+      "validity": {
+        "can_compare": false,
+        "is_valid": false,
+        "reason_count": 2,
+        "reason_counts": {
+          "needs-rerun": 2
+        },
+        "reasons": [
+          {
+            "code": "missing|resource",
+            "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+            "row": {},
+            "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+            "status": "needs-rerun"
+          },
+          {
+            "code": "unstable",
+            "message": "CV exceeds the declared threshold",
+            "row": {},
+            "row_label": "sync / httpx",
+            "status": "needs-rerun"
+          }
+        ],
+        "status": "needs-rerun"
+      }
+    },
+    "runs": [
+      {
+        "retained": "diagnostic detail"
+      }
+    ],
+    "timestamp": "2030-01-02T03:04:05Z"
+  },
+  "streaming_lifecycle_report.md.j2": {
+    "aggregate": [
+      {
+        "bytes_read_total": 1024,
+        "case": "z-case",
+        "client": "foghttp",
+        "close_return_p95_ms": null,
+        "concurrency": 4,
+        "cpu_phase_deltas": [
+          {
+            "from_phase": "load-start",
+            "role": "client",
+            "system_s_median": null,
+            "to_phase": "load-end",
+            "user_s_median": 0.125
+          }
+        ],
+        "errors_total": 1,
+        "expected_aborts_total": 1,
+        "first_item_p95_ms": 0.0,
+        "mode": "async",
+        "ok_streams_s_median": 125.125,
+        "phase_resources": [
+          {
+            "fds_median": 4,
+            "phase": "after-client-close",
+            "role": "server",
+            "rss_bytes_median": null,
+            "threads_median": 0
+          }
+        ],
+        "recovery_p95_ms": 2.5,
+        "repeats": 3,
+        "resources": {
+          "client": {
+            "lifetime_high_water_rss_bytes_max": 16384,
+            "sampled_peak_fds_max": 4,
+            "sampled_peak_rss_bytes_max": 8192,
+            "sampled_peak_threads_max": 0
+          },
+          "server": {
+            "lifetime_high_water_rss_bytes_max": null,
+            "sampled_peak_fds_max": 0,
+            "sampled_peak_rss_bytes_max": null,
+            "sampled_peak_threads_max": 2
+          }
+        },
+        "streams_s_cv_percent": null,
+        "successful_repeats": 2,
+        "warmup_errors_total": 0
+      }
+    ],
+    "metadata": {
+      "comparison_policy": "Compare only identical lifecycle configurations.",
+      "config": {
+        "clients": "foghttp,httpx",
+        "payload_bytes": 1024,
+        "read_bytes": null
+      },
+      "harness_source": {
+        "module_file": "fixture-checkout/foghttp_benchmark/streaming/lifecycle.py"
+      },
+      "lifecycle": {
+        "cases": [
+          {
+            "case": "z-case",
+            "client": "foghttp",
+            "client_pid": 101,
+            "concurrency": 4,
+            "failure": null,
+            "mode": "async",
+            "parent_pid": 100,
+            "repeat": 1,
+            "sequence": 2,
+            "server_pid": 102,
+            "worker_status": "ok"
+          },
+          {
+            "case": "a-case",
+            "client": "httpx",
+            "client_pid": 103,
+            "concurrency": 1,
+            "failure": "incomplete EOF",
+            "mode": "sync",
+            "parent_pid": 100,
+            "repeat": 1,
+            "sequence": 1,
+            "server_pid": 104,
+            "worker_status": "failed"
+          }
+        ]
+      },
+      "measurement_scope": "separate-client-server-processes-v1",
+      "package_sources": {
+        "foghttp": {
+          "source_sha": "0000000000000000000000000000000000000000",
+          "version": "0.4.2"
+        }
+      },
+      "package_versions": {
+        "foghttp": "0.4.2",
+        "httpx": "0.28.1"
+      },
+      "sampling": {
+        "interval_s": 0.05,
+        "limitations": "Sampled peaks do not establish complete bounds."
+      },
+      "validity": {
+        "can_compare": false,
+        "is_valid": false,
+        "reason_count": 2,
+        "reason_counts": {
+          "needs-rerun": 2
+        },
+        "reasons": [
+          {
+            "code": "missing|resource",
+            "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+            "row": {},
+            "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+            "status": "needs-rerun"
+          },
+          {
+            "code": "unstable",
+            "message": "CV exceeds the declared threshold",
+            "row": {},
+            "row_label": "sync / httpx",
+            "status": "needs-rerun"
+          }
+        ],
+        "status": "needs-rerun"
+      }
+    },
+    "runs": [
+      {
+        "retained": "diagnostic detail"
+      }
+    ],
+    "timestamp": "2030-01-02T03:04:05Z"
+  },
+  "streaming_report.md.j2": {
+    "aggregate": [
+      {
+        "bytes_read_total": 1024,
+        "case": "z-case|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "chunks_read_total": 8,
+        "client": "foghttp",
+        "concurrency": 4,
+        "consume": "eof",
+        "error_rate_percent": 1.5625,
+        "error_types": {
+          "TimeoutError": 1
+        },
+        "errors_total": 1,
+        "fds_max": 12,
+        "final_connections_aborted_max": 0,
+        "final_connections_closed_max": null,
+        "final_connections_opened_max": 1,
+        "final_connections_reused_max": 2,
+        "final_idle_connections_max": 1,
+        "final_response_body_aborted_max": null,
+        "final_response_body_closed_max": 3,
+        "final_response_body_reuse_eligible_max": 0,
+        "first_chunk_p95_ms_median": null,
+        "lines_s_median": null,
+        "mb_s_median": 4.25,
+        "mode": "async",
+        "ok_streams_s_median": 125.125,
+        "p50_ms_median": 0.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "read": "bytes",
+        "request_limit": 8,
+        "resource_coverage": {
+          "fds_max": {
+            "available": 2,
+            "expected": 3,
+            "unavailable_reasons": [
+              "unsupported"
+            ]
+          },
+          "rss_mb_max": {
+            "available": 0,
+            "expected": 3,
+            "unavailable_reasons": [
+              "denied|probe\r\nretry"
+            ]
+          },
+          "threads_max": {
+            "available": 3,
+            "expected": 3,
+            "unavailable_reasons": []
+          }
+        },
+        "rss_mb_max": null,
+        "scenario": "z-last|\u0441\u0442\u0440\u043e\u043a\u0430\r\nnext",
+        "streams_s_cv_percent": null,
+        "threads_max": 0,
+        "throughput_scope": "verified-eof-v2",
+        "timing_scope": "load-only-v2",
+        "verified_eof_bytes_total": 512,
+        "verified_eof_chunks_total": 4,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      },
+      {
+        "bytes_read_total": 1024,
+        "case": "a-case",
+        "chunks_read_total": 8,
+        "client": "httpx",
+        "concurrency": 4,
+        "consume": "eof",
+        "error_rate_percent": 1.5625,
+        "error_types": {},
+        "errors_total": 0,
+        "fds_max": 0,
+        "final_connections_aborted_max": 0,
+        "final_connections_closed_max": null,
+        "final_connections_opened_max": 1,
+        "final_connections_reused_max": 2,
+        "final_idle_connections_max": 1,
+        "final_response_body_aborted_max": null,
+        "final_response_body_closed_max": 3,
+        "final_response_body_reuse_eligible_max": 0,
+        "first_chunk_p95_ms_median": null,
+        "lines_s_median": null,
+        "mb_s_median": 4.25,
+        "mode": "sync",
+        "ok_streams_s_median": 125.125,
+        "p50_ms_median": 0.125,
+        "p95_ms_median": 1.25,
+        "p99_ms_median": 2.5,
+        "read": "bytes",
+        "request_limit": 8,
+        "resource_coverage": {},
+        "rss_mb_max": 0,
+        "scenario": "a-first",
+        "streams_s_cv_percent": null,
+        "threads_max": null,
+        "throughput_scope": "verified-eof-v2",
+        "timing_scope": "load-only-v2",
+        "verified_eof_bytes_total": 512,
+        "verified_eof_chunks_total": 4,
+        "warmup_error_types": {},
+        "warmup_errors_total": 0
+      }
+    ],
+    "args": {
+      "client_counts": "1,3",
+      "clients": "foghttp,httpx",
+      "concurrency": "1,4",
+      "isolation": "per-client-scenario",
+      "iterations": 100,
+      "max_redirects": 5,
+      "modes": "async,sync",
+      "no_shuffle": true,
+      "output_dir": "fixture-output",
+      "repeats": 3,
+      "requests": 64,
+      "scenarios": "small,large",
+      "seed": 17,
+      "suite": "requests",
+      "warmup": 2
+    },
+    "platform_name": "FixtureOS-42-test",
+    "python_version": "3.11.99-fixture",
+    "skipped": {
+      "a-unsupported": "unsupported platform",
+      "z-missing": "optional native module absent"
+    },
+    "timestamp": "2030-01-02T03:04:05Z",
+    "validity": {
+      "can_compare": false,
+      "is_valid": false,
+      "reason_count": 2,
+      "reason_counts": {
+        "needs-rerun": 2
+      },
+      "reasons": [
+        {
+          "code": "missing|resource",
+          "message": "first|reason\r\nsecond\rthird\n\u0447\u0435\u0442\u0432\u0451\u0440\u0442\u044b\u0439",
+          "row": {},
+          "row_label": "async / foghttp / \u0431\u043b\u043e\u043a",
+          "status": "needs-rerun"
+        },
+        {
+          "code": "unstable",
+          "message": "CV exceeds the declared threshold",
+          "row": {},
+          "row_label": "sync / httpx",
+          "status": "needs-rerun"
+        }
+      ],
+      "status": "needs-rerun"
+    }
+  }
+}

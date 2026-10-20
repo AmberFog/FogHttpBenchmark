@@ -1,23 +1,26 @@
+from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
+from foghttp_benchmark._child import build_child_args, build_parser
 from foghttp_benchmark.constants import (
-    BENCHMARK_SEED,
-    DEFAULT_CLIENT_COUNTS,
-    DEFAULT_CONCURRENCY,
-    DEFAULT_CREATION_ITERATIONS,
-    DEFAULT_MAX_REDIRECTS,
-    DEFAULT_REPEATS,
-    DEFAULT_REQUESTS,
-    DEFAULT_SCENARIOS,
+    CLIENT_CREATION_SUITE,
+    COMPRESSED_RESPONSE_SUITE,
     DEFAULT_WARMUP,
+    ONE_UPSTREAM_SUITE,
+    PROXY_CONNECT_SUITE,
+    REQUEST_BUILDER_SUITE,
     REQUESTS_SUITE,
+    RESOURCE_BACKPRESSURE_SUITE,
+    RESPONSE_STREAMING_SUITE,
 )
 from foghttp_benchmark.isolation.planning import (
     benchmark_child_command,
     build_client_isolation_plan,
     build_client_scenario_isolation_plan,
 )
-from foghttp_benchmark.models import BenchmarkArgs
+from tests.isolation.args_factory import benchmark_args
 
 
 def test_child_command_does_not_expose_isolation_bypass_flag(tmp_path: Path) -> None:
@@ -58,20 +61,40 @@ def test_client_scenario_isolation_plan_splits_clients_and_scenarios(tmp_path: P
     assert plan[1].command[plan[1].command.index("--scenarios") + 1] == "proxy-connect"
 
 
-def benchmark_args(output_dir: Path) -> BenchmarkArgs:
-    return BenchmarkArgs(
-        suite=REQUESTS_SUITE,
-        clients="foghttp,httpx",
-        modes="async",
-        concurrency=DEFAULT_CONCURRENCY,
-        requests=DEFAULT_REQUESTS,
-        warmup=DEFAULT_WARMUP,
-        repeats=DEFAULT_REPEATS,
-        max_redirects=DEFAULT_MAX_REDIRECTS,
-        seed=BENCHMARK_SEED,
-        no_shuffle=True,
+@pytest.mark.parametrize(
+    "suite",
+    [
+        REQUESTS_SUITE,
+        CLIENT_CREATION_SUITE,
+        RESOURCE_BACKPRESSURE_SUITE,
+        ONE_UPSTREAM_SUITE,
+        REQUEST_BUILDER_SUITE,
+        COMPRESSED_RESPONSE_SUITE,
+        RESPONSE_STREAMING_SUITE,
+        PROXY_CONNECT_SUITE,
+    ],
+)
+@pytest.mark.parametrize(("warmup", "no_shuffle"), [(DEFAULT_WARMUP, True), (0, False)])
+@pytest.mark.parametrize("scenario", [None, "selected-case"])
+def test_child_command_preserves_effective_arguments_without_reapplying_defaults(
+    tmp_path: Path,
+    suite: str,
+    warmup: int,
+    *,
+    no_shuffle: bool,
+    scenario: str | None,
+) -> None:
+    args = replace(benchmark_args(tmp_path), suite=suite, warmup=warmup, no_shuffle=no_shuffle)
+    output_dir = tmp_path / "child"
+
+    command = benchmark_child_command(args, client="httpx", output_dir=output_dir, scenario=scenario)
+    namespace = build_parser().parse_args(command[3:])
+    child_args = build_child_args(namespace)
+
+    assert child_args == replace(
+        args,
+        clients="httpx",
         output_dir=str(output_dir),
-        scenarios=DEFAULT_SCENARIOS,
-        iterations=DEFAULT_CREATION_ITERATIONS,
-        client_counts=DEFAULT_CLIENT_COUNTS,
+        scenarios=args.scenarios if scenario is None else scenario,
     )
+    assert namespace.show_progress is False

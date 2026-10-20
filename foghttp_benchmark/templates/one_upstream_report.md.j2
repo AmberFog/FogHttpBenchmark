@@ -32,5 +32,7 @@
 | mode | client | group | case | profile | conc | ok/s median | direct ratio | p95 ms | p99 ms | errors % | max RSS MB | max threads | max fds | error types | warmup error types |
 | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
 {% for row in aggregate %}
-| {{ row.mode }} | {{ row.client }} | {{ row.group }} | {{ row.case }} | {{ row.profile }} | {{ row.concurrency }} | {{ value(row.ok_req_s_median, 1) }} | {{ value(row.baseline_ratio, 3) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ value(row.error_rate_percent, 2) }} | {{ value(row.rss_mb_max, 1) }} | {{ row.threads_max }} | {{ row.fds_max }} | `{{ row.error_types }}` | `{{ row.warmup_error_types }}` |
+| {{ row.mode }} | {{ row.client }} | {{ row.group }} | {{ row.case }} | {{ row.profile }} | {{ row.concurrency }} | {{ value(row.ok_req_s_median, 1) }} | {{ value(row.baseline_ratio, 3) }} | {{ value(row.p95_ms_median, 2) }} | {{ value(row.p99_ms_median, 2) }} | {{ value(row.error_rate_percent, 2) }} | {{ row.rss_mb_max|resource_value(1) }} | {{ row.threads_max|resource_value(0) }} | {{ row.fds_max|resource_value(0) }} | `{{ row.error_types }}` | `{{ row.warmup_error_types }}` |
 {% endfor %}
+
+{% include "resource_coverage.md.j2" %}

@@ -1,6 +1,8 @@
 __all__ = ("AsyncClientAdapter", "SyncClientAdapter")
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 
 
 if TYPE_CHECKING:
@@ -8,6 +10,8 @@ if TYPE_CHECKING:
 
 
 class AsyncClientAdapter:
+    mode: Literal["async"] = ASYNC_MODE
+
     async def request(self, scenario: "Scenario", url: str) -> "ResponseOutcome":
         raise NotImplementedError
 
@@ -19,6 +23,8 @@ class AsyncClientAdapter:
 
 
 class SyncClientAdapter:
+    mode: Literal["sync"] = SYNC_MODE
+
     def request(self, scenario: "Scenario", url: str) -> "ResponseOutcome":
         raise NotImplementedError
 

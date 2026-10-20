@@ -1,11 +1,11 @@
 import asyncio
+from typing import Literal
 
 import pytest
 
-from foghttp_benchmark.constants import ASYNC_MODE
 from foghttp_benchmark.models import ClientStats
 from foghttp_benchmark.one_upstream import runner
-from foghttp_benchmark.one_upstream.models import OneUpstreamCase, OneUpstreamClientSpec
+from foghttp_benchmark.one_upstream.models import AsyncOneUpstreamClientSpec, OneUpstreamCase
 from foghttp_benchmark.run_settling import RunSettlingConfig
 
 
@@ -24,9 +24,8 @@ def test_one_upstream_runner_settles_after_high_connection_churn(monkeypatch: py
         calls.append(client_stats)
 
     monkeypatch.setattr(runner, "settle_after_run", fake_settle_after_run)
-    spec = OneUpstreamClientSpec(
+    spec = AsyncOneUpstreamClientSpec(
         name="foghttp",
-        mode=ASYNC_MODE,
         factory=lambda _config: FakeAsyncOneUpstreamAdapter(),
     )
 
@@ -55,6 +54,8 @@ def test_one_upstream_runner_settles_after_high_connection_churn(monkeypatch: py
 
 
 class FakeAsyncOneUpstreamAdapter:
+    mode: Literal["async"] = "async"
+
     async def request(self, _case: OneUpstreamCase, _base_url: str) -> bool:
         return True
 

@@ -1,6 +1,5 @@
 __all__ = (
     "build_comparison",
-    "render_compare_markdown",
     "write_or_print_compare_report",
 )
 
@@ -11,7 +10,7 @@ import typer
 from foghttp_benchmark.compare.analysis import compare_reports
 from foghttp_benchmark.compare.loading import load_benchmark_report
 from foghttp_benchmark.compare.models import ComparisonResult
-from foghttp_benchmark.reports import report_environment
+from foghttp_benchmark.rendering import load_report_template, render_compare_markdown
 
 
 def build_comparison(
@@ -37,15 +36,10 @@ def write_or_print_compare_report(
     comparison: ComparisonResult,
     output_path: Path | None,
 ) -> None:
-    markdown = render_compare_markdown(comparison)
+    markdown = render_compare_markdown(load_report_template("compare_report.md.j2"), comparison)
     if output_path is None:
         typer.echo(markdown, nl=False)
         return
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(markdown)
-
-
-def render_compare_markdown(comparison: ComparisonResult) -> str:
-    template = report_environment().get_template("compare_report.md.j2")
-    return template.render(comparison=comparison)

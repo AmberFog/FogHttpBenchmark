@@ -4,20 +4,35 @@ __all__ = (
     "write_proxy_connect_reports",
 )
 
-from collections.abc import Iterable
 from dataclasses import asdict, replace
-import json
 from pathlib import Path
 import platform
 import statistics
 import sys
 import time
+from typing import cast
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
-from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES, PROXY_CONNECT_SUITE
+from foghttp_benchmark.constants import PROXY_CONNECT_SUITE
+from foghttp_benchmark.measurement_timing import current_timing_scope
 from foghttp_benchmark.models import BenchmarkArgs, ClientStatKey
+from foghttp_benchmark.proxy_connect.finalization import finalize_proxy_connect_rows
 from foghttp_benchmark.proxy_connect.models import ProxyConnectAggregateRow, ProxyConnectResult
-from foghttp_benchmark.reports import package_versions, report_environment
+from foghttp_benchmark.rendering import (
+    ProxyRenderContext,
+    RenderEnvironment,
+    SuiteRenderContext,
+    load_report_template,
+    render_proxy_markdown,
+)
+from foghttp_benchmark.report_publication import publish_report
+from foghttp_benchmark.reports import package_versions
+from foghttp_benchmark.resource_metrics import (
+    RESOURCE_METRIC_SCHEMA_VERSION,
+    optional_resource_max,
+    resource_coverage,
+)
+from foghttp_benchmark.statistics import coefficient_of_variation, merge_error_types
 from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
@@ -67,6 +82,13 @@ def build_aggregate_row(
     mode, client, case, group, target_scheme, config, lifecycle, concurrency, request_limit = key
     requests_total = sum(item.requests for item in items)
     errors_total = sum(item.errors for item in items)
+    stat_keys: tuple[ClientStatKey, ...] = (
+        "connections_opened",
+        "connections_reused",
+        "connections_closed",
+        "connections_aborted",
+    )
+    stats = {key: client_stat_values(items, key) for key in stat_keys}
     return ProxyConnectAggregateRow(
         mode=mode,
         client=client,
@@ -90,66 +112,40 @@ def build_aggregate_row(
         p50_ms_median=statistics.median(item.p50_ms for item in items),
         p95_ms_median=statistics.median(item.p95_ms for item in items),
         p99_ms_median=statistics.median(item.p99_ms for item in items),
-        rss_mb_max=max((item.peak_rss_mb or 0.0) for item in items),
-        threads_max=max((item.peak_threads or 0) for item in items),
-        fds_max=max((item.peak_fds or 0) for item in items),
+        rss_mb_max=optional_resource_max(item.peak_rss_mb for item in items),
+        threads_max=optional_resource_max(item.peak_threads for item in items),
+        fds_max=optional_resource_max(item.peak_fds for item in items),
         measured_proxy_http_requests_max=max(item.measured_proxy.http_requests for item in items),
         measured_proxy_connect_requests_max=max(item.measured_proxy.connect_requests for item in items),
         total_proxy_http_requests_max=max(item.total_proxy.http_requests for item in items),
         total_proxy_connect_requests_max=max(item.total_proxy.connect_requests for item in items),
         proxy_authorization_headers_max=max(item.total_proxy.proxy_authorization_headers for item in items),
-        final_connections_opened_max=client_stat_max(items, "connections_opened"),
-        final_connections_reused_max=client_stat_max(items, "connections_reused"),
-        final_connections_closed_max=client_stat_max(items, "connections_closed"),
-        final_connections_aborted_max=client_stat_max(items, "connections_aborted"),
+        final_connections_opened_max=optional_resource_max(stats["connections_opened"]),
+        final_connections_reused_max=optional_resource_max(stats["connections_reused"]),
+        final_connections_closed_max=optional_resource_max(stats["connections_closed"]),
+        final_connections_aborted_max=optional_resource_max(stats["connections_aborted"]),
         error_types=merge_error_types(item.error_types for item in items),
+        resource_coverage=resource_coverage(
+            {
+                "rss_mb_max": [item.peak_rss_mb for item in items],
+                "threads_max": [item.peak_threads for item in items],
+                "fds_max": [item.peak_fds for item in items],
+                **{f"final_{key}_max": values for key, values in stats.items()},
+            },
+        ),
     )
 
 
 def rows_with_direct_ratios(rows: list[ProxyConnectAggregateRow]) -> list[ProxyConnectAggregateRow]:
-    baselines = {
-        (row.mode, row.client, row.target_scheme, row.concurrency): row.ok_req_s_median
-        for row in rows
-        if row.config == "direct" and row.lifecycle == "reused-client"
-    }
+    finalized = finalize_proxy_connect_rows([asdict(row) for row in rows])
     return [
-        replace(
-            row,
-            direct_ratio=baseline_ratio(
-                row.ok_req_s_median,
-                baselines.get((row.mode, row.client, row.target_scheme, row.concurrency)),
-            ),
-        )
-        for row in rows
+        replace(row, direct_ratio=cast("float | None", normalized["direct_ratio"]))
+        for row, normalized in zip(rows, finalized, strict=True)
     ]
 
 
-def coefficient_of_variation(values: list[float]) -> float:
-    if len(values) < MIN_VARIATION_SAMPLES:
-        return 0.0
-    mean = statistics.mean(values)
-    if mean == 0:
-        return 0.0
-    return (statistics.stdev(values) / mean) * 100
-
-
-def baseline_ratio(value: float, baseline: float | None) -> float | None:
-    if baseline is None or baseline <= 0:
-        return None
-    return value / baseline
-
-
-def client_stat_max(items: list[ProxyConnectResult], key: ClientStatKey) -> int | None:
-    values = [item.client_stats[key] for item in items if item.client_stats is not None and key in item.client_stats]
-    return max(values) if values else None
-
-
-def merge_error_types(values: Iterable[dict[str, int]]) -> dict[str, int]:
-    merged: dict[str, int] = {}
-    for errors in values:
-        for key, count in errors.items():
-            merged[key] = merged.get(key, 0) + count
-    return merged
+def client_stat_values(items: list[ProxyConnectResult], key: ClientStatKey) -> list[int | None]:
+    return [item.client_stats.get(key) if item.client_stats is not None else None for item in items]
 
 
 def redacted_proxy_url(value: str) -> str:
@@ -170,7 +166,6 @@ def write_proxy_connect_reports(
     proxy_url: str,
 ) -> None:
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     aggregate = aggregate_proxy_connect_results(results)
     redacted_proxy = redacted_proxy_url(proxy_url)
@@ -183,6 +178,8 @@ def write_proxy_connect_reports(
             "platform": platform.platform(),
             "server": "local asyncio HTTP/1.1 + HTTPS loopback origin with local HTTP proxy",
             "suite": PROXY_CONNECT_SUITE,
+            "timing_scope": current_timing_scope(PROXY_CONNECT_SUITE),
+            "resource_metric_schema_version": RESOURCE_METRIC_SCHEMA_VERSION,
             "args": vars(args),
             "proxy_url": redacted_proxy,
             "package_versions": package_versions(),
@@ -190,52 +187,29 @@ def write_proxy_connect_reports(
         },
         aggregate_rows,
     )
-    payload = {
+    payload: dict[str, object] = {
         "metadata": metadata_payload,
         "aggregate": aggregate_rows,
         "runs": run_rows,
     }
-    json_path = output_dir / f"{timestamp}.json"
-    md_path = output_dir / f"{timestamp}.md"
-    latest_json = output_dir / "latest.json"
-    latest_md = output_dir / "latest.md"
-
-    json_text = json.dumps(payload, indent=2, sort_keys=True)
-    json_path.write_text(json_text + "\n")
-    latest_json.write_text(json_text + "\n")
-
-    markdown = render_proxy_connect_markdown_report(
-        timestamp,
-        aggregate,
-        skipped,
-        args,
-        proxy_url=redacted_proxy,
-        validity=metadata_payload["validity"],
+    markdown = render_proxy_markdown(
+        load_report_template("proxy_connect_report.md.j2"),
+        ProxyRenderContext(
+            report=SuiteRenderContext(
+                timestamp=timestamp,
+                args=args,
+                aggregate=aggregate,
+                skipped=skipped,
+                validity=metadata_payload["validity"],
+                environment=RenderEnvironment(
+                    python_version=platform.python_version(),
+                    platform_name=platform.platform(),
+                ),
+            ),
+            proxy_url=redacted_proxy,
+        ),
     )
-    md_path.write_text(markdown)
-    latest_md.write_text(markdown)
-
-
-def render_proxy_connect_markdown_report(
-    timestamp: str,
-    aggregate: list[ProxyConnectAggregateRow],
-    skipped: dict[str, str],
-    args: BenchmarkArgs,
-    *,
-    proxy_url: str,
-    validity: object,
-) -> str:
-    template = report_environment().get_template("proxy_connect_report.md.j2")
-    return template.render(
-        aggregate=aggregate,
-        args=args,
-        platform_name=platform.platform(),
-        proxy_url=proxy_url,
-        python_version=platform.python_version(),
-        skipped=skipped,
-        timestamp=timestamp,
-        validity=validity,
-    )
+    publish_report(output_dir, timestamp, payload, markdown)
 
 
 def config_order(config: str) -> int:

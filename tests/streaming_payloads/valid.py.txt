@@ -1,0 +1,56 @@
+from typing import assert_type
+
+from foghttp_benchmark.streaming.attribution_consume import PendingStream
+from foghttp_benchmark.streaming.attribution_measure import _cpu_delta, _cpu_snapshot, measure_async_batch
+from foghttp_benchmark.streaming.attribution_models import AttributionConfig
+from foghttp_benchmark.streaming.attribution_payloads import (
+    AttributionBatch,
+    BatchStreamError,
+    CpuDelta,
+    CpuSnapshot,
+    FinalizedStreamSample,
+    StreamError,
+)
+from foghttp_benchmark.streaming.protocols import AsyncStreamClient
+
+
+def cpu_fields() -> CpuDelta:
+    snapshot = _cpu_snapshot(1)
+    assert_type(snapshot, CpuSnapshot)
+    assert_type(snapshot["user_s"], float | None)
+    assert_type(snapshot["probe_finished_ns"], int)
+    delta = _cpu_delta(snapshot, snapshot, started_ns=1, finished_ns=2, verified_bytes=0)
+    assert_type(delta, CpuDelta)
+    assert_type(delta["total_s"], float | None)
+    assert_type(delta["before"], CpuSnapshot)
+    return delta
+
+
+def sample_fields(pending: PendingStream) -> FinalizedStreamSample:
+    sample = pending.finalize(body_bytes=1, expected_digest="digest")
+    assert_type(sample, FinalizedStreamSample)
+    assert_type(sample["verified_success_bytes"], int)
+    assert_type(sample["error"], StreamError | None)
+    assert_type(sample["delivery_samples"][0]["gap_ms"], float | None)
+    assert_type(sample["distribution"]["histogram"][0]["count"], int)
+    assert_type(sample["gap_samples_ms"], list[float])
+    return sample
+
+
+async def batch_fields(client: AsyncStreamClient, config: AttributionConfig) -> AttributionBatch:
+    batch = await measure_async_batch(
+        client,
+        "http://example.invalid",
+        body_bytes=1,
+        concurrency=1,
+        rounds=1,
+        config=config,
+        server_pid=2,
+        batch=1,
+    )
+    assert_type(batch, AttributionBatch)
+    assert_type(batch["samples"], list[FinalizedStreamSample])
+    assert_type(batch["errors"], list[BatchStreamError])
+    assert_type(batch["cpu"]["client"]["total_s"], float | None)
+    assert_type(batch["timing"]["load_finished_ns"], int)
+    return batch

@@ -1,9 +1,8 @@
 __all__ = ("RequestAggregateRow", "aggregate_results", "write_reports")
 
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from importlib import import_module, metadata
-import json
 import os
 from pathlib import Path
 import platform
@@ -13,15 +12,26 @@ import time
 import tomllib
 from types import ModuleType
 
-from jinja2 import Environment, FileSystemLoader
-
-from foghttp_benchmark.constants import MIN_VARIATION_SAMPLES
+from foghttp_benchmark.measurement_timing import current_timing_scope
 from foghttp_benchmark.models import BenchmarkArgs, RunResult
+from foghttp_benchmark.rendering import (
+    RenderEnvironment,
+    SuiteRenderContext,
+    load_report_template,
+    render_suite_markdown,
+)
+from foghttp_benchmark.report_publication import publish_report
+from foghttp_benchmark.resource_metrics import (
+    RESOURCE_METRIC_SCHEMA_VERSION,
+    ResourceCoverage,
+    optional_resource_max,
+    resource_coverage,
+)
 from foghttp_benchmark.run_settling import RunSettlingConfig, run_settling_config
+from foghttp_benchmark.statistics import coefficient_of_variation, merge_error_types
 from foghttp_benchmark.validity.reports import metadata_with_validity
 
 
-TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 REPORT_PACKAGES = (
     "foghttp",
     "httpx",
@@ -52,14 +62,15 @@ class RequestAggregateRow:
     p50_ms_median: float
     p95_ms_median: float
     p99_ms_median: float
-    rss_mb_max: float
-    threads_max: int
-    fds_max: int
+    rss_mb_max: float | None
+    threads_max: int | None
+    fds_max: int | None
     errors_total: int
     warmup_errors_total: int
     error_types: dict[str, int]
     warmup_error_types: dict[str, int]
     error_rate_percent: float
+    resource_coverage: ResourceCoverage = field(default_factory=dict)
 
 
 def aggregate_results(results: list[RunResult]) -> list[RequestAggregateRow]:
@@ -89,34 +100,24 @@ def aggregate_results(results: list[RunResult]) -> list[RequestAggregateRow]:
                 p50_ms_median=statistics.median(item.p50_ms for item in items),
                 p95_ms_median=statistics.median(item.p95_ms for item in items),
                 p99_ms_median=statistics.median(item.p99_ms for item in items),
-                rss_mb_max=max((item.peak_rss_mb or 0.0) for item in items),
-                threads_max=max((item.peak_threads or 0) for item in items),
-                fds_max=max((item.peak_fds or 0) for item in items),
+                rss_mb_max=optional_resource_max(item.peak_rss_mb for item in items),
+                threads_max=optional_resource_max(item.peak_threads for item in items),
+                fds_max=optional_resource_max(item.peak_fds for item in items),
                 errors_total=errors_total,
                 warmup_errors_total=sum(item.warmup_errors for item in items),
                 error_types=merge_error_types(item.error_types for item in items),
                 warmup_error_types=merge_error_types(item.warmup_error_types for item in items),
                 error_rate_percent=(errors_total / requests_total) * 100 if requests_total else 0.0,
+                resource_coverage=resource_coverage(
+                    {
+                        "rss_mb_max": [item.peak_rss_mb for item in items],
+                        "threads_max": [item.peak_threads for item in items],
+                        "fds_max": [item.peak_fds for item in items],
+                    },
+                ),
             ),
         )
     return rows
-
-
-def merge_error_types(values: Iterable[dict[str, int]]) -> dict[str, int]:
-    merged: dict[str, int] = {}
-    for error_types in values:
-        for name, count in error_types.items():
-            merged[name] = merged.get(name, 0) + count
-    return merged
-
-
-def coefficient_of_variation(values: list[float]) -> float:
-    if len(values) < MIN_VARIATION_SAMPLES:
-        return 0.0
-    mean = statistics.mean(values)
-    if mean == 0:
-        return 0.0
-    return (statistics.stdev(values) / mean) * 100
 
 
 def write_reports(
@@ -127,7 +128,6 @@ def write_reports(
     settling_config: RunSettlingConfig | None = None,
 ) -> None:
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     actual_settling_config = settling_config or run_settling_config(os.environ)
     aggregate = aggregate_results(results)
@@ -140,6 +140,8 @@ def write_reports(
             "platform": platform.platform(),
             "server": "local asyncio HTTP/1.1 loopback server",
             "suite": args.suite,
+            "timing_scope": current_timing_scope(args.suite),
+            "resource_metric_schema_version": RESOURCE_METRIC_SCHEMA_VERSION,
             "args": vars(args),
             "package_versions": package_versions(),
             "run_settling": {
@@ -150,59 +152,26 @@ def write_reports(
         },
         aggregate_rows,
     )
-    payload = {
+    payload: dict[str, object] = {
         "metadata": metadata_payload,
         "aggregate": aggregate_rows,
         "runs": run_rows,
     }
-    json_path = output_dir / f"{timestamp}.json"
-    md_path = output_dir / f"{timestamp}.md"
-    latest_json = output_dir / "latest.json"
-    latest_md = output_dir / "latest.md"
-
-    json_text = json.dumps(payload, indent=2, sort_keys=True)
-    json_path.write_text(json_text + "\n")
-    latest_json.write_text(json_text + "\n")
-
-    markdown = render_markdown_report(timestamp, aggregate, skipped, args, metadata_payload["validity"])
-    md_path.write_text(markdown)
-    latest_md.write_text(markdown)
-
-
-def render_markdown_report(
-    timestamp: str,
-    aggregate: list[RequestAggregateRow],
-    skipped: dict[str, str],
-    args: BenchmarkArgs,
-    validity: object,
-) -> str:
-    template = report_environment().get_template("report.md.j2")
-    return template.render(
-        aggregate=aggregate,
-        args=args,
-        platform_name=platform.platform(),
-        python_version=platform.python_version(),
-        skipped=skipped,
-        timestamp=timestamp,
-        validity=validity,
+    markdown = render_suite_markdown(
+        load_report_template("report.md.j2"),
+        SuiteRenderContext(
+            timestamp=timestamp,
+            args=args,
+            aggregate=aggregate,
+            skipped=skipped,
+            validity=metadata_payload["validity"],
+            environment=RenderEnvironment(
+                python_version=platform.python_version(),
+                platform_name=platform.platform(),
+            ),
+        ),
     )
-
-
-def report_environment() -> Environment:
-    environment = Environment(
-        autoescape=False,  # noqa: S701 - this template renders Markdown, not HTML.
-        keep_trailing_newline=True,
-        loader=FileSystemLoader(TEMPLATE_DIR),
-        lstrip_blocks=True,
-        trim_blocks=True,
-    )
-    environment.filters["markdown_table_cell"] = markdown_table_cell
-    return environment
-
-
-def markdown_table_cell(value: object) -> str:
-    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
-    return text.replace("|", r"\|").replace("\n", "<br>")
+    publish_report(output_dir, timestamp, payload, markdown)
 
 
 def package_versions(names: Iterable[str] = REPORT_PACKAGES) -> dict[str, str]:

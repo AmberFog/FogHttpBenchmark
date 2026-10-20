@@ -7,16 +7,18 @@ __all__ = (
     "ComparisonValidity",
     "ErrorRow",
     "JsonObject",
+    "ResourceCoverageComparison",
     "ResourceSummary",
     "RowComparison",
     "SegmentSummary",
     "WinsComparison",
 )
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, TypeAlias
 
+from foghttp_benchmark.resource_metrics import ResourceCoverage
 from foghttp_benchmark.validity.models import ValiditySummary
 
 
@@ -44,6 +46,7 @@ class BenchmarkReport:
     aggregate_rows: list[JsonObject]
     metadata: JsonObject
     validity: ValiditySummary
+    run_rows: list[JsonObject] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +67,8 @@ class BenchmarkRow:
     rss_mb: float | None
     threads: int | None
     fds: int | None
+    resource_coverage: ResourceCoverage = field(default_factory=dict)
+    resource_unavailable_reasons: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +162,15 @@ class ResourceSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ResourceCoverageComparison:
+    label: str
+    old: ResourceCoverage
+    new: ResourceCoverage
+    old_unavailable_reasons: dict[str, tuple[str, ...]]
+    new_unavailable_reasons: dict[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True, slots=True)
 class ComparisonResult:
     metadata: ComparisonMetadata
     validity: ComparisonValidity
@@ -170,3 +184,4 @@ class ComparisonResult:
     resource_summary: ResourceSummary
     unmatched_old_rows: int
     unmatched_new_rows: int
+    resource_coverage: tuple[ResourceCoverageComparison, ...] = ()

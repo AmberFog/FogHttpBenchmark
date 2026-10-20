@@ -1,0 +1,31 @@
+import importlib.abc
+import sys
+
+
+class BlockCliImports(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in {"foghttp_benchmark.cli", "foghttp_benchmark._child"} or fullname.split(".")[0] in {
+            "typer", "click",
+        }:
+            raise RuntimeError(f"Application imported a CLI dependency: {fullname}")
+        return None
+
+
+def reject_execution(event, args):
+    if event in {"subprocess.Popen", "socket.bind", "socket.connect"}:
+        raise RuntimeError(f"Import started benchmark work: {event}")
+
+
+sys.meta_path.insert(0, BlockCliImports())
+sys.addaudithook(reject_execution)
+
+from foghttp_benchmark.application import composition, execution
+
+assert callable(execution.run_benchmark)
+assert callable(execution.run_benchmark_child)
+assert callable(composition.run_benchmark_suite)
+assert "foghttp_benchmark.cli" not in sys.modules
+assert "foghttp_benchmark._child" not in sys.modules
+assert "typer" not in sys.modules
+assert "click" not in sys.modules
+print("application-import-ok")

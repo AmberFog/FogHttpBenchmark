@@ -10,7 +10,7 @@ from foghttp_benchmark.streaming.attribution_models import (
     MAX_WINDOW_STREAMS,
     MIN_WINDOW_STREAMS,
 )
-from foghttp_benchmark.streaming.lifecycle_reports import int_value, number, object_list, object_value
+from foghttp_benchmark.streaming.report_values import int_value, number, object_list, object_value
 
 
 def window_workload_matches(batch: JsonObject, configuration: JsonObject, concurrency: int) -> bool:

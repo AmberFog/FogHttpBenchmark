@@ -1,5 +1,7 @@
 __all__ = (
     "AsyncProxyConnectAdapter",
+    "AsyncProxyConnectClientFactory",
+    "AsyncProxyConnectClientSpec",
     "ProxyConfigKind",
     "ProxyConnectAggregateRow",
     "ProxyConnectCase",
@@ -14,13 +16,17 @@ __all__ = (
     "ProxyStatsDelta",
     "ProxyTargetScheme",
     "SyncProxyConnectAdapter",
+    "SyncProxyConnectClientFactory",
+    "SyncProxyConnectClientSpec",
 )
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeAlias
 
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.models import ClientStats
+from foghttp_benchmark.resource_metrics import ResourceCoverage
 
 
 ProxyConfigKind: TypeAlias = Literal["direct", "explicit", "trust-env"]
@@ -88,6 +94,9 @@ class ProxyStatsDelta:
 
 
 class AsyncProxyConnectAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["async"]: ...
+
     async def request(self, case: ProxyConnectCase, url: str) -> bool: ...
 
     async def close(self) -> None: ...
@@ -96,6 +105,9 @@ class AsyncProxyConnectAdapter(Protocol):
 
 
 class SyncProxyConnectAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["sync"]: ...
+
     def request(self, case: ProxyConnectCase, url: str) -> bool: ...
 
     def close(self) -> None: ...
@@ -103,17 +115,26 @@ class SyncProxyConnectAdapter(Protocol):
     def stats(self) -> ClientStats | None: ...
 
 
-ProxyConnectClientFactory: TypeAlias = Callable[
-    [ProxyConnectClientConfig],
-    AsyncProxyConnectAdapter | SyncProxyConnectAdapter,
-]
+AsyncProxyConnectClientFactory: TypeAlias = Callable[[ProxyConnectClientConfig], AsyncProxyConnectAdapter]
+SyncProxyConnectClientFactory: TypeAlias = Callable[[ProxyConnectClientConfig], SyncProxyConnectAdapter]
+ProxyConnectClientFactory: TypeAlias = AsyncProxyConnectClientFactory | SyncProxyConnectClientFactory
 
 
 @dataclass(frozen=True, slots=True)
-class ProxyConnectClientSpec:
+class AsyncProxyConnectClientSpec:
     name: str
-    mode: str
-    factory: ProxyConnectClientFactory
+    factory: AsyncProxyConnectClientFactory
+    mode: Literal["async"] = field(default=ASYNC_MODE, init=False)
+
+
+@dataclass(frozen=True, slots=True)
+class SyncProxyConnectClientSpec:
+    name: str
+    factory: SyncProxyConnectClientFactory
+    mode: Literal["sync"] = field(default=SYNC_MODE, init=False)
+
+
+ProxyConnectClientSpec: TypeAlias = AsyncProxyConnectClientSpec | SyncProxyConnectClientSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,9 +200,9 @@ class ProxyConnectAggregateRow:
     p50_ms_median: float
     p95_ms_median: float
     p99_ms_median: float
-    rss_mb_max: float
-    threads_max: int
-    fds_max: int
+    rss_mb_max: float | None
+    threads_max: int | None
+    fds_max: int | None
     measured_proxy_http_requests_max: int
     measured_proxy_connect_requests_max: int
     total_proxy_http_requests_max: int
@@ -192,3 +213,4 @@ class ProxyConnectAggregateRow:
     final_connections_closed_max: int | None
     final_connections_aborted_max: int | None
     error_types: dict[str, int]
+    resource_coverage: ResourceCoverage = field(default_factory=dict)

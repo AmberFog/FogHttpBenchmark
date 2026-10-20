@@ -1,5 +1,7 @@
 __all__ = (
     "AsyncOneUpstreamAdapter",
+    "AsyncOneUpstreamClientFactory",
+    "AsyncOneUpstreamClientSpec",
     "BodyKind",
     "OneUpstreamAggregateRow",
     "OneUpstreamCase",
@@ -10,13 +12,17 @@ __all__ = (
     "OneUpstreamStats",
     "ProfileKind",
     "SyncOneUpstreamAdapter",
+    "SyncOneUpstreamClientFactory",
+    "SyncOneUpstreamClientSpec",
 )
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeAlias
 
+from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
 from foghttp_benchmark.models import ClientStats
+from foghttp_benchmark.resource_metrics import ResourceCoverage
 
 
 BodyKind: TypeAlias = Literal["none", "json", "form"]
@@ -58,6 +64,9 @@ class OneUpstreamClientConfig:
 
 
 class AsyncOneUpstreamAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["async"]: ...
+
     async def request(self, case: OneUpstreamCase, base_url: str) -> bool: ...
 
     async def close(self) -> None: ...
@@ -66,6 +75,9 @@ class AsyncOneUpstreamAdapter(Protocol):
 
 
 class SyncOneUpstreamAdapter(Protocol):
+    @property
+    def mode(self) -> Literal["sync"]: ...
+
     def request(self, case: OneUpstreamCase, base_url: str) -> bool: ...
 
     def close(self) -> None: ...
@@ -73,17 +85,26 @@ class SyncOneUpstreamAdapter(Protocol):
     def stats(self) -> ClientStats | None: ...
 
 
-OneUpstreamClientFactory: TypeAlias = Callable[
-    [OneUpstreamClientConfig],
-    AsyncOneUpstreamAdapter | SyncOneUpstreamAdapter,
-]
+AsyncOneUpstreamClientFactory: TypeAlias = Callable[[OneUpstreamClientConfig], AsyncOneUpstreamAdapter]
+SyncOneUpstreamClientFactory: TypeAlias = Callable[[OneUpstreamClientConfig], SyncOneUpstreamAdapter]
+OneUpstreamClientFactory: TypeAlias = AsyncOneUpstreamClientFactory | SyncOneUpstreamClientFactory
 
 
 @dataclass(frozen=True, slots=True)
-class OneUpstreamClientSpec:
+class AsyncOneUpstreamClientSpec:
     name: str
-    mode: str
-    factory: OneUpstreamClientFactory
+    factory: AsyncOneUpstreamClientFactory
+    mode: Literal["async"] = field(default=ASYNC_MODE, init=False)
+
+
+@dataclass(frozen=True, slots=True)
+class SyncOneUpstreamClientSpec:
+    name: str
+    factory: SyncOneUpstreamClientFactory
+    mode: Literal["sync"] = field(default=SYNC_MODE, init=False)
+
+
+OneUpstreamClientSpec: TypeAlias = AsyncOneUpstreamClientSpec | SyncOneUpstreamClientSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,10 +165,11 @@ class OneUpstreamAggregateRow:
     p50_ms_median: float
     p95_ms_median: float
     p99_ms_median: float
-    rss_mb_max: float
-    threads_max: int
-    fds_max: int
+    rss_mb_max: float | None
+    threads_max: int | None
+    fds_max: int | None
     error_types: dict[str, int]
+    resource_coverage: ResourceCoverage = field(default_factory=dict)
 
 
 def query_items(items: Sequence[tuple[str, str]]) -> QueryItems:

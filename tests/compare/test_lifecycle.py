@@ -5,7 +5,7 @@ import pytest
 
 from foghttp_benchmark.compare.analysis import compare_reports
 from foghttp_benchmark.compare.loading import load_benchmark_report
-from foghttp_benchmark.compare.reports import render_compare_markdown
+from foghttp_benchmark.rendering import load_report_template, render_compare_markdown
 from tests.compare.factories import write_report
 
 
@@ -22,6 +22,11 @@ def streaming_row(*, lifecycle: bool = False) -> dict:
         "consume": "all",
         "concurrency": 1,
         "request_limit": 1,
+        "requests": 20,
+        "repeats": 1,
+        "ok_streams_total": 20,
+        "errors_total": 0,
+        "warmup_errors_total": 0,
         "ok_streams_s_median": 20.0,
         "rss_mb_max": 100.0,
         "threads_max": 3,
@@ -72,7 +77,10 @@ def test_old_json_is_readable_but_different_resource_scopes_are_incomparable(tmp
     assert summary.new_rss_mb_max is None
     assert summary.old_threads_max is None
     assert summary.new_fds_max is None
-    assert "Resource metrics incomparable" in render_compare_markdown(comparison)
+    assert "Resource metrics incomparable" in render_compare_markdown(
+        load_report_template("compare_report.md.j2"),
+        comparison,
+    )
 
 
 def test_historical_resource_scope_remains_comparable_with_itself(tmp_path: Path) -> None:

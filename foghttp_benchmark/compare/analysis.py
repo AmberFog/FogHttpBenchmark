@@ -14,11 +14,14 @@ from foghttp_benchmark.compare.models import (
     ComparisonResult,
     ComparisonValidity,
     ErrorRow,
+    ResourceCoverageComparison,
     ResourceSummary,
     RowComparison,
     SegmentSummary,
     WinsComparison,
 )
+from foghttp_benchmark.measurement_timing import validate_timing_compatibility
+from foghttp_benchmark.report_schema.identity import validate_unique_identities
 from foghttp_benchmark.validity.models import ValidityReason
 from foghttp_benchmark.validity.streaming_profiles import uses_streaming_profile
 
@@ -78,6 +81,16 @@ def compare_reports(
         ),
         unmatched_old_rows=len(set(old_rows) - set(new_rows)),
         unmatched_new_rows=len(set(new_rows) - set(old_rows)),
+        resource_coverage=tuple(
+            ResourceCoverageComparison(
+                label=new_rows[key].label,
+                old=old_rows[key].resource_coverage,
+                new=new_rows[key].resource_coverage,
+                old_unavailable_reasons=old_rows[key].resource_unavailable_reasons,
+                new_unavailable_reasons=new_rows[key].resource_unavailable_reasons,
+            )
+            for key in shared_keys
+        ),
     )
 
 
@@ -107,6 +120,15 @@ def validate_comparable_reports(
         if old_source != new_source and comparison_axis != "foghttp-source":
             msg = "FogHTTP source revisions differ; explicitly select comparison_axis='foghttp-source'"
             raise ValueError(msg)
+    validate_timing_compatibility(
+        old_report.suite,
+        old_report.metadata,
+        old_report.aggregate_rows,
+        new_report.metadata,
+        new_report.aggregate_rows,
+        old_runs=old_report.run_rows,
+        new_runs=new_report.run_rows,
+    )
 
 
 def foghttp_source(report: BenchmarkReport) -> object:
@@ -137,7 +159,19 @@ def reason_summary(reason: ValidityReason) -> str:
 
 
 def focus_rows_by_identity(report: BenchmarkReport, focus_client: str) -> dict[tuple[str, ...], BenchmarkRow]:
-    return {row.identity: row for row in report.rows if row.client == focus_client and row.primary_value is not None}
+    return {
+        row.identity: row
+        for row in canonical_rows(report)
+        if row.client == focus_client and row.primary_value is not None
+    }
+
+
+def canonical_rows(report: BenchmarkReport) -> list[BenchmarkRow]:
+    validate_unique_identities(
+        (row.identity for row in report.rows),
+        sources=(f"{report.path}:aggregate[{index}]" for index in range(len(report.rows))),
+    )
+    return sorted(report.rows, key=lambda row: row.identity)
 
 
 def compare_row(old_row: BenchmarkRow, new_row: BenchmarkRow) -> RowComparison:
@@ -207,6 +241,7 @@ def compare_wins(
 
 
 def wins_for_report(report: BenchmarkReport, focus_client: str) -> WinsSnapshot | None:
+    ordered_rows = canonical_rows(report)
     if (
         report.suite == "resource-backpressure"
         or uses_streaming_profile(report.metadata, report.aggregate_rows, "lifecycle")
@@ -214,7 +249,7 @@ def wins_for_report(report: BenchmarkReport, focus_client: str) -> WinsSnapshot 
     ):
         return None
     grouped: dict[tuple[str, ...], list[BenchmarkRow]] = defaultdict(list)
-    for row in report.rows:
+    for row in ordered_rows:
         grouped[row.group].append(row)
 
     wins = 0
@@ -245,7 +280,7 @@ def wins_for_report(report: BenchmarkReport, focus_client: str) -> WinsSnapshot 
 
 def error_rows(report: BenchmarkReport) -> list[ErrorRow]:
     rows: list[ErrorRow] = []
-    for row in report.rows:
+    for row in canonical_rows(report):
         if row.errors_total == 0 and row.warmup_errors_total == 0:
             continue
         rows.append(

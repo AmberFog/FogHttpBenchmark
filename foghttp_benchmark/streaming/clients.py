@@ -12,36 +12,36 @@ from foghttp_benchmark.streaming.factories import (
     make_httpxyz_sync,
     validate_streaming_support,
 )
-from foghttp_benchmark.streaming.models import StreamingClientFactory, StreamingClientSpec
+from foghttp_benchmark.streaming.models import (
+    AsyncStreamingClientSpec,
+    StreamingClientSpec,
+    SyncStreamingClientSpec,
+)
 
 
 def available_streaming_clients(
     requested_clients: list[str],
     requested_modes: list[str],
 ) -> tuple[list[StreamingClientSpec], dict[str, str]]:
-    factories: dict[str, dict[str, StreamingClientFactory]] = {
-        ASYNC_MODE: {
-            "foghttp": make_foghttp_async,
-            "httpx": make_httpx_async,
-            "httpxyz": make_httpxyz_async,
-            "aiohttp": make_aiohttp_async,
-        },
-        SYNC_MODE: {
-            "foghttp": make_foghttp_sync,
-            "httpx": make_httpx_sync,
-            "httpxyz": make_httpxyz_sync,
-        },
-    }
+    specs: tuple[StreamingClientSpec, ...] = (
+        AsyncStreamingClientSpec(name="foghttp", factory=make_foghttp_async),
+        AsyncStreamingClientSpec(name="httpx", factory=make_httpx_async),
+        AsyncStreamingClientSpec(name="httpxyz", factory=make_httpxyz_async),
+        AsyncStreamingClientSpec(name="aiohttp", factory=make_aiohttp_async),
+        SyncStreamingClientSpec(name="foghttp", factory=make_foghttp_sync),
+        SyncStreamingClientSpec(name="httpx", factory=make_httpx_sync),
+        SyncStreamingClientSpec(name="httpxyz", factory=make_httpxyz_sync),
+    )
+    specs_by_identity: dict[tuple[str, str], StreamingClientSpec] = {(spec.mode, spec.name): spec for spec in specs}
     clients: list[StreamingClientSpec] = []
     skipped: dict[str, str] = {}
     for mode in requested_modes:
-        mode_factories = factories.get(mode)
-        if mode_factories is None:
+        if mode not in {ASYNC_MODE, SYNC_MODE}:
             skipped[f"{mode}:*"] = "unknown mode"
             continue
         for name in requested_clients:
-            factory = mode_factories.get(name)
-            if factory is None:
+            spec = specs_by_identity.get((mode, name))
+            if spec is None:
                 skipped[f"{mode}:{name}"] = "response-streaming suite requires comparable streaming support"
                 continue
             try:
@@ -50,5 +50,5 @@ def available_streaming_clients(
             except Exception as exc:  # noqa: BLE001
                 skipped[f"{mode}:{name}"] = f"{type(exc).__name__}: {exc}"
                 continue
-            clients.append(StreamingClientSpec(name=name, mode=mode, factory=factory))
+            clients.append(spec)
     return clients, skipped

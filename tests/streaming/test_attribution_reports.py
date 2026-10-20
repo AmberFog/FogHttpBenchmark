@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from foghttp_benchmark.compare.loading import load_benchmark_report
-from foghttp_benchmark.streaming.attribution_reports import aggregate_attribution_results, measurement_conditions
+from foghttp_benchmark.streaming.attribution_aggregation import aggregate_attribution_results
+from foghttp_benchmark.streaming.attribution_reports import measurement_conditions
 from tests.streaming.attribution_report_factory import BODY_BYTES, config, result, write_report
 
 

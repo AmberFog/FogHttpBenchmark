@@ -1,7 +1,9 @@
 from pathlib import Path
 
+from foghttp_benchmark.application.composition import get_suite
 from foghttp_benchmark.constants import (
     BENCHMARK_SEED,
+    CLIENT_CREATION_SUITE,
     DEFAULT_CLIENT_COUNTS,
     DEFAULT_CONCURRENCY,
     DEFAULT_CREATION_ITERATIONS,
@@ -14,20 +16,31 @@ from foghttp_benchmark.constants import (
     PROXY_CONNECT_SUITE,
     REQUESTS_SUITE,
 )
-from foghttp_benchmark.isolation.scenarios import scenario_names_for_isolation
 from foghttp_benchmark.models import BenchmarkArgs
 
 
-def test_scenario_names_for_isolation_uses_suite_defaults_for_proxy_connect(tmp_path: Path) -> None:
+def test_scenario_names_for_isolation_preserves_resolved_proxy_connect_defaults(tmp_path: Path) -> None:
+    args = benchmark_args(tmp_path, suite=PROXY_CONNECT_SUITE, scenarios=DEFAULT_PROXY_CONNECT_SCENARIOS)
+
+    assert get_suite(args.suite).isolation_scenarios(args) == DEFAULT_PROXY_CONNECT_SCENARIOS.split(",")
+
+
+def test_scenario_names_for_isolation_preserves_explicit_global_default(tmp_path: Path) -> None:
     args = benchmark_args(tmp_path, suite=PROXY_CONNECT_SUITE, scenarios=DEFAULT_SCENARIOS)
 
-    assert scenario_names_for_isolation(args) == DEFAULT_PROXY_CONNECT_SCENARIOS.split(",")
+    assert get_suite(args.suite).isolation_scenarios(args) == DEFAULT_SCENARIOS.split(",")
+
+
+def test_client_creation_isolation_has_no_scenario_projection(tmp_path: Path) -> None:
+    args = benchmark_args(tmp_path, suite=CLIENT_CREATION_SUITE, scenarios=DEFAULT_SCENARIOS)
+
+    assert get_suite(args.suite).isolation_scenarios(args) == []
 
 
 def test_scenario_names_for_isolation_preserves_explicit_scenarios(tmp_path: Path) -> None:
     args = benchmark_args(tmp_path, suite=REQUESTS_SUITE, scenarios="json-small,bytes-64k")
 
-    assert scenario_names_for_isolation(args) == ["json-small", "bytes-64k"]
+    assert get_suite(args.suite).isolation_scenarios(args) == ["json-small", "bytes-64k"]
 
 
 def benchmark_args(output_dir: Path, *, suite: str, scenarios: str) -> BenchmarkArgs:

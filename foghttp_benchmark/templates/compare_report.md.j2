@@ -12,6 +12,22 @@
 {{ "%+.1f"|format((ratio - 1.0) * 100) }}%
 {%- endif %}
 {%- endmacro %}
+{% macro coverage(observation) -%}
+{% if observation is defined -%}
+{{ observation.available }}/{{ observation.expected }}{% if observation.available == 0 %} (unavailable){% elif observation.available < observation.expected %} (partial){% endif %}
+{%- else -%}
+unknown
+{%- endif %}
+{%- endmacro %}
+{% macro unavailable_reasons(observation, reasons) -%}
+{% if reasons -%}
+{{ reasons|join("; ")|markdown_table_cell }}
+{%- elif observation is defined and observation.available == observation.expected -%}
+none
+{%- else -%}
+not recorded
+{%- endif %}
+{%- endmacro %}
 # FogHTTP benchmark comparison
 
 - Suite: `{{ comparison.metadata.suite }}`
@@ -115,10 +131,27 @@ No error rows.
 
 | metric | old | new |
 | --- | ---: | ---: |
-| max RSS MB | {{ value(comparison.resource_summary.old_rss_mb_max, 1) }} | {{ value(comparison.resource_summary.new_rss_mb_max, 1) }} |
-| max threads | {{ comparison.resource_summary.old_threads_max if comparison.resource_summary.old_threads_max is not none else "-" }} | {{ comparison.resource_summary.new_threads_max if comparison.resource_summary.new_threads_max is not none else "-" }} |
-| max fds | {{ comparison.resource_summary.old_fds_max if comparison.resource_summary.old_fds_max is not none else "-" }} | {{ comparison.resource_summary.new_fds_max if comparison.resource_summary.new_fds_max is not none else "-" }} |
+| max RSS MB | {{ comparison.resource_summary.old_rss_mb_max|resource_value(1) }} | {{ comparison.resource_summary.new_rss_mb_max|resource_value(1) }} |
+| max threads | {{ comparison.resource_summary.old_threads_max|resource_value }} | {{ comparison.resource_summary.new_threads_max|resource_value }} |
+| max fds | {{ comparison.resource_summary.old_fds_max|resource_value }} | {{ comparison.resource_summary.new_fds_max|resource_value }} |
 | errors total | {{ comparison.resource_summary.old_errors_total }} | {{ comparison.resource_summary.new_errors_total }} |
+
+### Resource Observation Coverage
+
+Coverage is reported for each matched focus row as available/expected repetitions. Partial peaks describe available observations only; they do not establish a complete maximum. Unmatched rows are excluded from this table. The resource summary above includes all focus rows.
+
+Historical reports without coverage have unknown observation counts. Recorded numeric zero remains zero; historical missingness cannot be reconstructed. A missing unavailable reason is shown explicitly.
+
+| row | metric | old coverage | new coverage | old unavailable reasons | new unavailable reasons |
+| --- | --- | --- | --- | --- | --- |
+{% for row in comparison.resource_coverage %}
+{% set metrics = (row.old.keys()|list + row.new.keys()|list + row.old_unavailable_reasons.keys()|list + row.new_unavailable_reasons.keys()|list)|unique|sort %}
+{% for metric in metrics %}
+| {{ row.label|markdown_table_cell }} | {{ metric|markdown_table_cell }} | {{ coverage(row.old[metric]) }} | {{ coverage(row.new[metric]) }} | {{ unavailable_reasons(row.old[metric], row.old_unavailable_reasons.get(metric, ())) }} | {{ unavailable_reasons(row.new[metric], row.new_unavailable_reasons.get(metric, ())) }} |
+{% else %}
+| {{ row.label|markdown_table_cell }} | resource metrics | unknown | unknown | not recorded | not recorded |
+{% endfor %}
+{% endfor %}
 
 ## Coverage
 

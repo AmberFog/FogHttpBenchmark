@@ -1,0 +1,21 @@
+from foghttp_benchmark.clients.httpx_client import make_httpx_async, make_httpx_sync
+from foghttp_benchmark.models import AsyncClientSpec, SyncClientSpec
+from foghttp_benchmark.one_upstream import clients as upstream
+from foghttp_benchmark.one_upstream.models import AsyncOneUpstreamClientSpec, SyncOneUpstreamClientSpec
+from foghttp_benchmark.proxy_connect import clients as proxy
+from foghttp_benchmark.proxy_connect.models import AsyncProxyConnectClientSpec, SyncProxyConnectClientSpec
+from foghttp_benchmark.request_builder import clients as builder
+from foghttp_benchmark.request_builder.models import AsyncRequestBuilderClientSpec, SyncRequestBuilderClientSpec
+from foghttp_benchmark.streaming import factories as streaming
+from foghttp_benchmark.streaming.models import AsyncStreamingClientSpec, SyncStreamingClientSpec
+
+AsyncClientSpec("invalid", make_httpx_sync)  # expect: arg-type
+SyncClientSpec("invalid", make_httpx_async)  # expect: arg-type
+AsyncOneUpstreamClientSpec("invalid", upstream.make_httpx_sync)  # expect: arg-type
+SyncOneUpstreamClientSpec("invalid", upstream.make_httpx_async)  # expect: arg-type
+AsyncProxyConnectClientSpec("invalid", proxy.make_httpx_sync)  # expect: arg-type
+SyncProxyConnectClientSpec("invalid", proxy.make_httpx_async)  # expect: arg-type
+AsyncRequestBuilderClientSpec("invalid", builder.make_httpx_sync)  # expect: arg-type
+SyncRequestBuilderClientSpec("invalid", builder.make_httpx_async)  # expect: arg-type
+AsyncStreamingClientSpec("invalid", streaming.make_httpx_sync)  # expect: arg-type
+SyncStreamingClientSpec("invalid", streaming.make_httpx_async)  # expect: arg-type

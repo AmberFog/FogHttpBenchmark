@@ -15,40 +15,36 @@ from foghttp_benchmark.clients.zapros_client import (
     make_zapros_sync,
 )
 from foghttp_benchmark.constants import ASYNC_MODE, SYNC_MODE
-from foghttp_benchmark.models import ClientFactory, ClientSpec
+from foghttp_benchmark.models import AsyncClientSpec, ClientSpec, SyncClientSpec
 
 
 def available_clients(
     requested_clients: list[str],
     requested_modes: list[str],
 ) -> tuple[list[ClientSpec], dict[str, str]]:
-    factories: dict[str, dict[str, ClientFactory]] = {
-        ASYNC_MODE: {
-            "foghttp": make_foghttp_async,
-            "httpx": make_httpx_async,
-            "httpxyz": make_httpxyz_async,
-            "aiohttp": make_aiohttp_async,
-            "zapros": make_zapros_async,
-            ZAPROS_PYREQWEST_CLIENT: make_zapros_pyreqwest_async,
-        },
-        SYNC_MODE: {
-            "foghttp": make_foghttp_sync,
-            "httpx": make_httpx_sync,
-            "httpxyz": make_httpxyz_sync,
-            "zapros": make_zapros_sync,
-            ZAPROS_PYREQWEST_CLIENT: make_zapros_pyreqwest_sync,
-        },
-    }
+    specs: tuple[ClientSpec, ...] = (
+        AsyncClientSpec(name="foghttp", factory=make_foghttp_async),
+        AsyncClientSpec(name="httpx", factory=make_httpx_async),
+        AsyncClientSpec(name="httpxyz", factory=make_httpxyz_async),
+        AsyncClientSpec(name="aiohttp", factory=make_aiohttp_async),
+        AsyncClientSpec(name="zapros", factory=make_zapros_async),
+        AsyncClientSpec(name=ZAPROS_PYREQWEST_CLIENT, factory=make_zapros_pyreqwest_async),
+        SyncClientSpec(name="foghttp", factory=make_foghttp_sync),
+        SyncClientSpec(name="httpx", factory=make_httpx_sync),
+        SyncClientSpec(name="httpxyz", factory=make_httpxyz_sync),
+        SyncClientSpec(name="zapros", factory=make_zapros_sync),
+        SyncClientSpec(name=ZAPROS_PYREQWEST_CLIENT, factory=make_zapros_pyreqwest_sync),
+    )
+    specs_by_identity: dict[tuple[str, str], ClientSpec] = {(spec.mode, spec.name): spec for spec in specs}
     clients: list[ClientSpec] = []
     skipped: dict[str, str] = {}
     for mode in requested_modes:
-        mode_factories = factories.get(mode)
-        if mode_factories is None:
+        if mode not in {ASYNC_MODE, SYNC_MODE}:
             skipped[f"{mode}:*"] = "unknown mode"
             continue
         for name in requested_clients:
-            factory = mode_factories.get(name)
-            if factory is None:
+            spec = specs_by_identity.get((mode, name))
+            if spec is None:
                 skipped[f"{mode}:{name}"] = "unknown client"
                 continue
             try:
@@ -56,7 +52,7 @@ def available_clients(
             except Exception as exc:  # noqa: BLE001
                 skipped[f"{mode}:{name}"] = f"{type(exc).__name__}: {exc}"
                 continue
-            clients.append(ClientSpec(name=name, mode=mode, factory=factory))
+            clients.append(spec)
     return clients, skipped
 
 

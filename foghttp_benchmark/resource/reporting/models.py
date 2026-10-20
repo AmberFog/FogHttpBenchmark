@@ -1,6 +1,8 @@
 __all__ = ("ResourceAggregateRow",)
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from foghttp_benchmark.resource_metrics import ResourceCoverage
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,3 +39,4 @@ class ResourceAggregateRow:
     recovery_failures: int
     error_types: dict[str, int]
     warmup_error_types: dict[str, int]
+    resource_coverage: ResourceCoverage = field(default_factory=dict)
